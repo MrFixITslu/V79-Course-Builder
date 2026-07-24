@@ -17,17 +17,224 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// No fabricated demo courses are seeded. A production deployment should
-// start with a genuinely empty catalog; real courses are authored through
-// this app's editor. (Previously this contained fake instructor personas
-// such as "Elena Vance, CFA" and dummy lesson content pointing at a public
-// stock sample video - that has been removed.)
 const initialData = {
-  courses: [],
-  modules: [],
-  lessons: [],
-  quizzes: [],
-  assets: []
+  courses: [
+    {
+      id: "course-ffpro-01",
+      title: "Fire Finance Pro Masterclass: Advanced Portfolio Architecture",
+      shortDescription: "Master corporate treasury planning, multi-currency cash flow modeling, and liquidity optimization.",
+      fullDescription: "Fire Finance Pro (FFPRO2) empowers senior financial analysts and enterprise treasurers to build robust predictive cash models. This comprehensive masterclass covers automated treasury sweeps, capital reserve forecasting, interest rate risk hedging, and real-time ledger auditing across international subsidiaries.",
+      category: "Fire Finance Pro (FFPRO2)",
+      difficultyLevel: "Advanced",
+      instructor: "Elena Vance, CFA",
+      courseVersion: "2.1.0",
+      thumbnail: "https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=800&q=80",
+      estimatedDuration: "6.5 hours",
+      prerequisites: ["Intermediate Corporate Finance", "Excel/SQL Financial Modeling Proficiency"],
+      learning_objectives: [
+        "Design multi-currency treasury cash pools",
+        "Implement automated liquidity sweep rules",
+        "Execute dynamic interest rate hedging strategies",
+        "Perform real-time compliance audits on global ledgers"
+      ],
+      status: "Ready for Upload",
+      pricingType: "free",
+      price: 0,
+      createdAt: "2026-01-15T10:00:00Z",
+      updatedAt: "2026-07-20T14:30:00Z"
+    },
+    {
+      id: "course-siwm-02",
+      title: "SIWM Enterprise Identity & Access Management",
+      shortDescription: "Secure zero-trust cloud infrastructures and automated credential provisioning workflows.",
+      fullDescription: "SIWM (Secure Identity & Workforce Management) provides end-to-end security governance. Learn how to configure adaptive multi-factor authentication, role-based access control (RBAC), OAuth2/OIDC integration, and automated lifecycle de-provisioning for enterprise scale.",
+      category: "SIWM",
+      difficultyLevel: "Intermediate",
+      instructor: "Marcus Brody, CISSP",
+      courseVersion: "1.4.2",
+      thumbnail: "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=800&q=80",
+      estimatedDuration: "4.0 hours",
+      prerequisites: ["Basic Cloud Networking", "IAM Fundamentals"],
+      learning_objectives: [
+        "Configure Zero-Trust continuous verification policies",
+        "Integrate SSO with SAML 2.0 and OIDC providers",
+        "Audit privileged access management logs",
+        "Automate offboarding security handshakes"
+      ],
+      status: "Draft",
+      pricingType: "free",
+      price: 0,
+      createdAt: "2026-02-10T09:15:00Z",
+      updatedAt: "2026-07-22T11:20:00Z"
+    },
+    {
+      id: "course-tiquet-03",
+      title: "Tiquet Service Desk Operations & Incident Swarm",
+      shortDescription: "Accelerate resolution times with AI-assisted ticket triage and automated SLA escalation.",
+      fullDescription: "Designed for support operations leads and tier-3 incident managers, Tiquet streamlines customer service workflows. Master smart routing algorithms, customer sentiment analysis, root-cause tagging, and post-mortem reporting.",
+      category: "Tiquet",
+      difficultyLevel: "Beginner",
+      instructor: "Sarah Jenkins",
+      courseVersion: "1.0.0",
+      thumbnail: "https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=800&q=80",
+      estimatedDuration: "3.0 hours",
+      prerequisites: ["Customer Support Experience"],
+      learning_objectives: [
+        "Setup AI triage queues and auto-tagging rules",
+        "Configure SLA breach notification webhooks",
+        "Run incident swarm war rooms effectively",
+        "Analyze CSAT and First Response Time metrics"
+      ],
+      status: "Review",
+      pricingType: "free",
+      price: 0,
+      createdAt: "2026-03-05T14:00:00Z",
+      updatedAt: "2026-07-19T16:45:00Z"
+    },
+    {
+      id: "course-kashdash-04",
+      title: "KashDash Real-Time Merchant Analytics & Payouts",
+      shortDescription: "Optimize interchange fees, instant settlement routing, and fraud detection models.",
+      fullDescription: "KashDash empowers fintech operators to manage high-velocity payment processing. Explore cross-border payout routing, dynamic fee structures, chargeback mitigation, and real-time anomaly detection pipelines.",
+      category: "KashDash",
+      difficultyLevel: "Advanced",
+      instructor: "David K. Vance",
+      courseVersion: "3.0.1",
+      thumbnail: "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=800&q=80",
+      estimatedDuration: "5.5 hours",
+      prerequisites: ["Payment Gateway Basics", "API Integration Knowledge"],
+      learning_objectives: [
+        "Configure least-cost merchant acquirer routing",
+        "Build machine learning fraud scoring triggers",
+        "Reconcile multi-currency settlement ledgers",
+        "Handle PSD2 and PCI-DSS compliance requirements"
+      ],
+      status: "Ready for Upload",
+      pricingType: "free",
+      price: 0,
+      createdAt: "2025-11-20T08:00:00Z",
+      updatedAt: "2026-06-10T09:00:00Z"
+    }
+  ],
+  modules: [
+    {
+      id: "mod-01",
+      courseId: "course-ffpro-01",
+      title: "Module 1: Treasury Architecture & Cash Pools",
+      description: "Foundational concepts of global cash pooling and liquidity visibility across bank accounts.",
+      orderNumber: 1
+    },
+    {
+      id: "mod-02",
+      courseId: "course-ffpro-01",
+      title: "Module 2: Automated Liquidity Sweeps",
+      description: "Setting up zero-balance accounts (ZBA) and target balance sweeps.",
+      orderNumber: 2
+    },
+    {
+      id: "mod-03",
+      courseId: "course-siwm-02",
+      title: "Module 1: Zero-Trust Identity Principles",
+      description: "Core tenets of verifying every user, device, and request.",
+      orderNumber: 1
+    }
+  ],
+  lessons: [
+    {
+      id: "les-01",
+      moduleId: "mod-01",
+      courseId: "course-ffpro-01",
+      title: "Introduction to Global Cash Pooling",
+      description: "Understanding physical vs. notional pooling mechanisms.",
+      learning_objectives: ["Compare notional and physical pooling", "Identify currency conversion friction costs"],
+      estimatedTime: "30 mins",
+      lesson_content: `# Introduction to Global Cash Pooling\n\nGlobal cash pooling allows multinational corporations to consolidate liquidity across multiple banks and geographies. \n\n## Key Mechanisms\n1. **Physical Pooling (ZBA)**: Actual physical transfers of funds into a master concentration account at end-of-day.\n2. **Notional Pooling**: Interest offset calculation without physical fund movement, subject to local banking regulations.\n\n> **Pro-Tip**: Always account for withholding taxes and cross-border repatriation limits when structuring international cash pools.`,
+      videoUrl: "https://www.w3schools.com/html/mov_bbb.mp4",
+      audioUrl: "",
+      imageUrls: ["https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=800&q=80"],
+      downloads: [
+        { name: "Cash_Pooling_Architecture_Template.pdf", url: "#", size: "2.4 MB", type: "pdf" },
+        { name: "Global_Subsidiary_Matrix.xlsx", url: "#", size: "1.1 MB", type: "spreadsheet" }
+      ],
+      exercisePrompt: "Draft a sample cash concentration flowchart for a European subsidiary network with EUR and GBP accounts.",
+      orderNumber: 1
+    },
+    {
+      id: "les-02",
+      moduleId: "mod-01",
+      courseId: "course-ffpro-01",
+      title: "Regulatory Compliance in Cross-Border Sweeps",
+      description: "Navigating central bank restrictions and exchange controls.",
+      learning_objectives: ["Identify exchange controls in emerging markets", "Mitigate repatriation delays"],
+      estimatedTime: "45 mins",
+      lesson_content: `# Regulatory Compliance & Exchange Controls\n\nOperating automated sweeps across restrictive jurisdictions requires deep understanding of local central bank mandates.\n\n## Core Areas of Focus\n- **Blocked Currencies**: Managing funds that cannot be freely converted.\n- **Thin Capitalization Rules**: Debt-to-equity ratio constraints.\n- **Transfer Pricing Documentation**: Ensuring arm's-length interest allocations.`,
+      videoUrl: "https://www.w3schools.com/html/mov_bbb.mp4",
+      downloads: [
+        { name: "Compliance_Checklist_2026.pdf", url: "#", size: "850 KB", type: "pdf" }
+      ],
+      exercisePrompt: "Review the sample compliance log and identify 3 potential regulatory violations.",
+      orderNumber: 2
+    }
+  ],
+  quizzes: [
+    {
+      id: "quiz-01",
+      lessonId: "les-01",
+      title: "Cash Pooling Fundamentals Assessment",
+      passingScore: 80,
+      questions: [
+        {
+          id: "q-01",
+          quizId: "quiz-01",
+          questionText: "What is the primary difference between physical and notional cash pooling?",
+          questionType: "multiple_choice",
+          options: [
+            "Physical pooling involves actual fund transfers, while notional pooling calculates interest without moving funds.",
+            "Notional pooling is illegal in all EU jurisdictions.",
+            "Physical pooling eliminates currency risk completely.",
+            "There is no operational difference."
+          ],
+          correctAnswer: "Physical pooling involves actual fund transfers, while notional pooling calculates interest without moving funds.",
+          explanation: "Physical pooling moves funds into a concentration account (ZBA), whereas notional pooling aggregates balances mathematically for interest calculation only.",
+          orderNumber: 1
+        },
+        {
+          id: "q-02",
+          quizId: "quiz-01",
+          questionText: "True or False: Notional pooling requires zero regulatory oversight regarding cross-border interest compensation.",
+          questionType: "true_false",
+          options: ["True", "False"],
+          correctAnswer: "False",
+          explanation: "Notional pooling faces stringent anti-churning and cross-guarantee regulations in most banking jurisdictions.",
+          orderNumber: 2
+        }
+      ]
+    }
+  ],
+  assets: [
+    {
+      id: "ast-01",
+      courseId: "course-ffpro-01",
+      moduleId: "mod-01",
+      lessonId: "les-01",
+      name: "Cash_Pooling_Architecture_Template.pdf",
+      fileType: "pdf",
+      url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+      fileSize: "2.4 MB",
+      uploadedAt: "2026-07-15T12:00:00Z"
+    },
+    {
+      id: "ast-02",
+      courseId: "course-ffpro-01",
+      moduleId: "mod-01",
+      lessonId: "les-01",
+      name: "Global_Subsidiary_Matrix.xlsx",
+      fileType: "document",
+      url: "#",
+      fileSize: "1.1 MB",
+      uploadedAt: "2026-07-15T12:05:00Z"
+    }
+  ]
 };
 
 function loadData() {
