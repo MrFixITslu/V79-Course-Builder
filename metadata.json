@@ -1,0 +1,6 @@
+{
+  "name": "V79 Academy Course Builder",
+  "description": "Internal course authoring, management, quiz builder, and export system for V79 applications.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
