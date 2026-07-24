@@ -20,8 +20,23 @@ The **V79 Academy Course Builder** is an enterprise-grade internal course author
 
 - **Frontend**: React, Vite, Tailwind CSS, Lucide Icons, Motion
 - **Backend**: Node.js, Express, TypeScript
-- **Database**: PostgreSQL (with durable relational schema)
+- **Database**: a JSON file store (`data/store.json`). Note: `docker-compose.yml` also starts a PostgreSQL container and `schema.sql` describes a relational schema for one, but the server does not currently read `DATABASE_URL` or connect to Postgres at all - that container is currently unused. Until the server is migrated to actually use it, don't rely on the Postgres schema for durability; only `data/store.json` is real.
 - **Deployment**: Docker & Docker Compose
+
+---
+
+## Publishing courses to the website
+
+Previously, marking a course "Uploaded" was just a status label - it didn't send anything anywhere. Publishing is now a real action: the **Publish to Website** button (in a course's Settings tab) transforms the course's modules, lessons, and quizzes into the website's expected format and creates or updates the matching entry there via its admin API.
+
+To enable it, set these two environment variables for this app:
+
+- `WEBSITE_SYNC_URL` - the base URL of the website (e.g. `https://vision79.example.com`), no trailing slash.
+- `WEBSITE_ADMIN_PASSWORD` - that website's current admin password.
+
+If the website's admin account still has a pending one-time password (e.g. right after a password reset), log into its `/admin` panel once to set a permanent password before publishing - the publish action will tell you if this is blocking it.
+
+Publishing again after edits updates the same website entry (tracked via `websiteAppId` on the course) rather than creating a duplicate. Pricing isn't set from the Course Builder yet - newly published courses default to free and can be priced from the website's own admin panel afterwards without affecting curriculum or exam content.
 
 ---
 
@@ -55,7 +70,7 @@ npm run dev
 
 ## Production Deployment (Docker Compose & Nginx Proxy Manager)
 
-To deploy the Course Builder with PostgreSQL and Nginx Proxy Manager (OpenResty):
+To deploy the Course Builder with PostgreSQL and Nginx Proxy Manager (OpenResty) for **cb.v79sl.duckdns.org**:
 
 1. **Ensure `proxy_network` exists**:
    ```bash
@@ -67,17 +82,17 @@ To deploy the Course Builder with PostgreSQL and Nginx Proxy Manager (OpenResty)
    docker compose up --build -d
    ```
 
-3. **Configure Nginx Proxy Manager UI**:
+3. **Configure Nginx Proxy Manager UI (for `cb.v79sl.duckdns.org`)**:
    - In your **Nginx Proxy Manager UI**:
-     - **Domain Names**: `your-domain.com` (or IP)
+     - **Domain Names**: `cb.v79sl.duckdns.org`
      - **Scheme**: `http`
-     - **Forward Hostname / IP**: `v79_course_builder` (or `v79_nginx_proxy`)
-     - **Forward Port**: `3080` (if forwarding directly to `v79_course_builder`) OR `80` (if forwarding to `v79_nginx_proxy`)
+     - **Forward Hostname / IP**: `v79_course_builder` (or server IP)
+     - **Forward Port**: `3030`
      - **Websockets Support**: **Enabled** (ON)
      - **Block Common Exploits**: **Enabled** (ON)
 
-> 💡 **Port Conflict Resolution (Port 3000 Avoidance)**:
-> - The application container internally uses **port 3080** instead of 3000 to prevent conflicts with other services on your server running on port 3000.
-> - Direct host access is available at `http://<your-server-ip>:3030`.
-> - If forwarding in Nginx Proxy Manager directly to container `v79_course_builder`, set **Forward Port** to `3080`.
+> 💡 **Port 3030 & Domain Setup (`cb.v79sl.duckdns.org`)**:
+> - The application container is configured to run on **port 3030** (`PORT=3030`).
+> - Direct host access is available at `http://cb.v79sl.duckdns.org:3030` or `http://localhost:3030`.
+> - If forwarding in Nginx Proxy Manager to container `v79_course_builder`, set **Forward Port** to `3030`.
 

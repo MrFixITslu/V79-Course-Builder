@@ -4,6 +4,8 @@ export type DifficultyLevel = 'Beginner' | 'Intermediate' | 'Advanced';
 
 export type CourseStatus = 'Draft' | 'Review' | 'Ready for Upload' | 'Uploaded';
 
+export type PricingType = 'free' | 'free_trial' | 'premium';
+
 export interface Course {
   id: string;
   title: string;
@@ -18,8 +20,14 @@ export interface Course {
   prerequisites: string[];
   learningObjectives: string[];
   status: CourseStatus;
+  pricingType: PricingType;
+  price: number; // only meaningful when pricingType is 'premium'
   createdAt: string;
   updatedAt: string;
+  // Set only by a successful /api/courses/:id/publish call - never by
+  // manually picking "Uploaded" from a dropdown.
+  websiteAppId?: number;
+  websitePublishedAt?: string;
 }
 
 export interface Module {

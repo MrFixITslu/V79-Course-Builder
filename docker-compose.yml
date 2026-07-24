@@ -21,14 +21,21 @@ services:
     build: .
     container_name: v79_course_builder
     expose:
-      - "3080"
+      - "3030"
     ports:
-      - "3030:3080"
+      - "3030:3030"
     environment:
       - NODE_ENV=production
-      - PORT=3080
+      - PORT=3030
       - DATABASE_URL=postgresql://v79_admin:v79_secure_password@postgres:5432/v79_academy_builder
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      # Required to publish courses to the website (website2026 / VISION79
+      # marketplace admin API). WEBSITE_ADMIN_PASSWORD must match that site's
+      # current admin password - if that site is showing its forced
+      # one-time-password screen, log in there and set a permanent password
+      # first, then put that same password here.
+      - WEBSITE_SYNC_URL=${WEBSITE_SYNC_URL}
+      - WEBSITE_ADMIN_PASSWORD=${WEBSITE_ADMIN_PASSWORD}
     depends_on:
       - postgres
     networks:
