@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Plus, Sparkles, Bell, Globe } from 'lucide-react';
+import { Search, Plus, Sparkles, Bell, Globe, LogOut } from 'lucide-react';
 
 interface HeaderProps {
   searchQuery: string;
@@ -7,6 +7,7 @@ interface HeaderProps {
   onNewCourse: () => void;
   onOpenAiAssistant: () => void;
   selectedAppCategory: string;
+  onLogout?: () => void;
 }
 
 export function Header({
@@ -14,7 +15,8 @@ export function Header({
   setSearchQuery,
   onNewCourse,
   onOpenAiAssistant,
-  selectedAppCategory
+  selectedAppCategory,
+  onLogout
 }: HeaderProps) {
   return (
     <header className="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between sticky top-0 z-30 shadow-xs">
@@ -56,10 +58,19 @@ export function Header({
 
         <div className="h-6 w-px bg-slate-200 mx-1"></div>
 
-        <button className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors relative">
+        <button className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
           <Bell className="w-5 h-5" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500"></span>
         </button>
+
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            title="Log out"
+            className="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
+        )}
       </div>
     </header>
   );

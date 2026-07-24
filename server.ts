@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 
@@ -16,6 +17,206 @@ const DATA_FILE = path.join(DATA_DIR, "store.json");
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
+
+// ---------------------------------------------------------------------------
+// Admin authentication
+// ---------------------------------------------------------------------------
+// This app previously had no login at all - anyone who could reach it could
+// create/edit/delete courses and trigger a real publish to the live website.
+// It now requires a password, using the same persisted-hash + forced
+// one-time-password-change pattern as the website's own admin panel.
+const cleanEnvValue = (val: any): string => {
+  if (!val) return "";
+  let clean = val.toString().trim();
+  if (clean.startsWith('"') && clean.endsWith('"')) clean = clean.substring(1, clean.length - 1);
+  if (clean.startsWith("'") && clean.endsWith("'")) clean = clean.substring(1, clean.length - 1);
+  return clean.trim();
+};
+
+const ADMIN_AUTH_PATH = path.join(DATA_DIR, ".admin_auth.json");
+
+interface AdminAuthRecord {
+  salt: string;
+  hash: string;
+  mustChangePassword: boolean;
+  updatedAt: string;
+}
+
+function hashAdminPassword(password: string, salt?: string): { salt: string; hash: string } {
+  const useSalt = salt || crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(password, useSalt, 64).toString("hex");
+  return { salt: useSalt, hash };
+}
+
+function verifyAdminPassword(password: string, record: AdminAuthRecord): boolean {
+  const { hash } = hashAdminPassword(password, record.salt);
+  const a = Buffer.from(hash, "hex");
+  const b = Buffer.from(record.hash, "hex");
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function saveAdminAuth(record: AdminAuthRecord) {
+  fs.writeFileSync(ADMIN_AUTH_PATH, JSON.stringify(record, null, 2), { mode: 0o600 });
+}
+
+function loadOrCreateAdminAuth(): AdminAuthRecord {
+  try {
+    if (fs.existsSync(ADMIN_AUTH_PATH)) {
+      const parsed = JSON.parse(fs.readFileSync(ADMIN_AUTH_PATH, "utf-8"));
+      if (parsed && typeof parsed.salt === "string" && typeof parsed.hash === "string") {
+        return parsed as AdminAuthRecord;
+      }
+    }
+  } catch (e) {
+    console.error("[Authentication] Failed to read persisted admin credential, regenerating:", e);
+  }
+
+  const initialPassword = cleanEnvValue(process.env.ADMIN_PASSWORD) || crypto.randomBytes(12).toString("base64url");
+  const { salt, hash } = hashAdminPassword(initialPassword);
+  const record: AdminAuthRecord = { salt, hash, mustChangePassword: true, updatedAt: new Date().toISOString() };
+  saveAdminAuth(record);
+  console.warn("=".repeat(70));
+  console.warn("[Authentication] Admin credential (re)initialized.");
+  console.warn(`[Authentication] One-time admin password: ${initialPassword}`);
+  console.warn("[Authentication] This password MUST be changed immediately after login - the next");
+  console.warn("[Authentication] successful login will be required to set a new permanent password");
+  console.warn("[Authentication] before any other action in this app is permitted.");
+  console.warn("=".repeat(70));
+  return record;
+}
+
+let adminAuth: AdminAuthRecord = loadOrCreateAdminAuth();
+
+const SESSION_COOKIE_NAME = "cb_session";
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+interface AdminSession {
+  expiry: number;
+  mustChangePassword: boolean;
+}
+const adminSessions = new Map<string, AdminSession>();
+
+function issueSession(mustChangePassword: boolean): string {
+  const token = crypto.randomBytes(32).toString("hex");
+  adminSessions.set(token, { expiry: Date.now() + SESSION_TTL_MS, mustChangePassword });
+  return token;
+}
+
+function getSession(token: string | undefined | null): AdminSession | null {
+  if (!token) return null;
+  const session = adminSessions.get(token);
+  if (!session) return null;
+  if (Date.now() > session.expiry) {
+    adminSessions.delete(token);
+    return null;
+  }
+  return session;
+}
+
+function invalidateAllSessions() {
+  adminSessions.clear();
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, session] of adminSessions.entries()) {
+    if (now > session.expiry) adminSessions.delete(token);
+  }
+}, 60 * 60 * 1000).unref();
+
+function parseCookies(req: express.Request): Record<string, string> {
+  const header = req.headers.cookie;
+  const out: Record<string, string> = {};
+  if (!header) return out;
+  for (const part of header.split(";")) {
+    const idx = part.indexOf("=");
+    if (idx === -1) continue;
+    const key = part.slice(0, idx).trim();
+    const val = part.slice(idx + 1).trim();
+    if (key) out[key] = decodeURIComponent(val);
+  }
+  return out;
+}
+
+function setSessionCookie(res: express.Response, token: string) {
+  const maxAgeSec = Math.floor(SESSION_TTL_MS / 1000);
+  res.setHeader(
+    "Set-Cookie",
+    `${SESSION_COOKIE_NAME}=${token}; HttpOnly; Path=/; Max-Age=${maxAgeSec}; SameSite=Lax`
+  );
+}
+
+function clearSessionCookie(res: express.Response) {
+  res.setHeader("Set-Cookie", `${SESSION_COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`);
+}
+
+app.post("/api/admin/login", (req, res) => {
+  const submitted = cleanEnvValue(req.body?.password);
+  if (submitted.length > 0 && verifyAdminPassword(submitted, adminAuth)) {
+    const token = issueSession(adminAuth.mustChangePassword);
+    setSessionCookie(res, token);
+    return res.json({ success: true, mustChangePassword: adminAuth.mustChangePassword });
+  }
+  return res.status(401).json({ error: "Incorrect password." });
+});
+
+app.post("/api/admin/logout", (req, res) => {
+  const token = parseCookies(req)[SESSION_COOKIE_NAME];
+  if (token) adminSessions.delete(token);
+  clearSessionCookie(res);
+  res.json({ success: true });
+});
+
+// Lets the frontend silently check "am I still logged in?" on page load
+// without needing to hit a real data endpoint first.
+app.get("/api/admin/session", (req, res) => {
+  const session = getSession(parseCookies(req)[SESSION_COOKIE_NAME]);
+  if (!session) return res.json({ authenticated: false });
+  res.json({ authenticated: true, mustChangePassword: session.mustChangePassword });
+});
+
+app.post("/api/admin/change-password", (req, res) => {
+  const session = getSession(parseCookies(req)[SESSION_COOKIE_NAME]);
+  if (!session) {
+    return res.status(401).json({ error: "Unauthorized: a valid session is required." });
+  }
+
+  const current = cleanEnvValue(req.body?.currentPassword);
+  const next = cleanEnvValue(req.body?.newPassword);
+
+  if (!verifyAdminPassword(current, adminAuth)) {
+    return res.status(401).json({ error: "Current password is incorrect." });
+  }
+  if (next.length < 12) {
+    return res.status(400).json({ error: "New password must be at least 12 characters long." });
+  }
+  if (verifyAdminPassword(next, adminAuth)) {
+    return res.status(400).json({ error: "New password must be different from the current password." });
+  }
+
+  const { salt, hash } = hashAdminPassword(next);
+  adminAuth = { salt, hash, mustChangePassword: false, updatedAt: new Date().toISOString() };
+  saveAdminAuth(adminAuth);
+
+  invalidateAllSessions();
+  const newToken = issueSession(false);
+  setSessionCookie(res, newToken);
+
+  res.json({ success: true });
+});
+
+// Everything under /api except the three routes above requires a valid,
+// fully-activated (non-password-pending) session.
+app.use("/api", (req, res, next) => {
+  const session = getSession(parseCookies(req)[SESSION_COOKIE_NAME]);
+  if (!session) {
+    return res.status(401).json({ error: "Unauthorized: please log in." });
+  }
+  if (session.mustChangePassword) {
+    return res.status(403).json({ error: "You must set a new password before continuing.", code: "PASSWORD_CHANGE_REQUIRED" });
+  }
+  next();
+});
 
 const initialData = {
   courses: [

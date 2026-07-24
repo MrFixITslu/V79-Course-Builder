@@ -36,6 +36,15 @@ services:
       # first, then put that same password here.
       - WEBSITE_SYNC_URL=${WEBSITE_SYNC_URL}
       - WEBSITE_ADMIN_PASSWORD=${WEBSITE_ADMIN_PASSWORD}
+      # OPTIONAL: seeds the very first one-time admin password on first boot
+      # only (see server.ts comments). If unset, one is generated randomly
+      # and printed once to `docker logs v79_course_builder`.
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+    volumes:
+      # Without this, course data AND the admin login credential are stored
+      # only inside the container's filesystem and are wiped on every
+      # rebuild/restart - this mount makes both persist.
+      - ./data:/app/data
     depends_on:
       - postgres
     networks:
