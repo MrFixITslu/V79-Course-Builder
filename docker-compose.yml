@@ -21,12 +21,12 @@ services:
     build: .
     container_name: v79_course_builder
     expose:
-      - "3080"
+      - "3030"
     ports:
-      - "3030:3080"
+      - "3030:3030"
     environment:
       - NODE_ENV=production
-      - PORT=3080
+      - PORT=3030
       - DATABASE_URL=postgresql://v79_admin:v79_secure_password@postgres:5432/v79_academy_builder
       - GEMINI_API_KEY=${GEMINI_API_KEY}
     depends_on:

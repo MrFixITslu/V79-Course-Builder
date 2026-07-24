@@ -55,7 +55,7 @@ npm run dev
 
 ## Production Deployment (Docker Compose & Nginx Proxy Manager)
 
-To deploy the Course Builder with PostgreSQL and Nginx Proxy Manager (OpenResty):
+To deploy the Course Builder with PostgreSQL and Nginx Proxy Manager (OpenResty) for **cb.v79sl.duckdns.org**:
 
 1. **Ensure `proxy_network` exists**:
    ```bash
@@ -67,17 +67,17 @@ To deploy the Course Builder with PostgreSQL and Nginx Proxy Manager (OpenResty)
    docker compose up --build -d
    ```
 
-3. **Configure Nginx Proxy Manager UI**:
+3. **Configure Nginx Proxy Manager UI (for `cb.v79sl.duckdns.org`)**:
    - In your **Nginx Proxy Manager UI**:
-     - **Domain Names**: `your-domain.com` (or IP)
+     - **Domain Names**: `cb.v79sl.duckdns.org`
      - **Scheme**: `http`
-     - **Forward Hostname / IP**: `v79_course_builder` (or `v79_nginx_proxy`)
-     - **Forward Port**: `3080` (if forwarding directly to `v79_course_builder`) OR `80` (if forwarding to `v79_nginx_proxy`)
+     - **Forward Hostname / IP**: `v79_course_builder` (or server IP)
+     - **Forward Port**: `3030`
      - **Websockets Support**: **Enabled** (ON)
      - **Block Common Exploits**: **Enabled** (ON)
 
-> 💡 **Port Conflict Resolution (Port 3000 Avoidance)**:
-> - The application container internally uses **port 3080** instead of 3000 to prevent conflicts with other services on your server running on port 3000.
-> - Direct host access is available at `http://<your-server-ip>:3030`.
-> - If forwarding in Nginx Proxy Manager directly to container `v79_course_builder`, set **Forward Port** to `3080`.
+> 💡 **Port 3030 & Domain Setup (`cb.v79sl.duckdns.org`)**:
+> - The application container is configured to run on **port 3030** (`PORT=3030`).
+> - Direct host access is available at `http://cb.v79sl.duckdns.org:3030` or `http://localhost:3030`.
+> - If forwarding in Nginx Proxy Manager to container `v79_course_builder`, set **Forward Port** to `3030`.
 
