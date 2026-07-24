@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Course, Lesson } from '../types';
-import { ArrowLeft, BookOpen, Layers, FolderKanban, Settings, Save, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, BookOpen, Layers, FolderKanban, Settings, Save, CheckCircle2, Clock, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { ModuleLessonManager } from './ModuleLessonManager';
 import { AssetManager } from './AssetManager';
 import { QuizBuilder } from './QuizBuilder';
@@ -16,37 +16,27 @@ export function CourseEditor({ course, onBack, onUpdateCourse, onExportCourse }:
   const [activeTab, setActiveTab] = useState<'overview' | 'curriculum' | 'assets' | 'quiz' | 'settings'>('curriculum');
   const [formData, setFormData] = useState<Course>({ ...course });
   const [selectedLessonForQuiz, setSelectedLessonForQuiz] = useState<Lesson | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'pending' | 'saving' | 'error'>('synced');
   const [lastSavedTime, setLastSavedTime] = useState<string>(new Date().toLocaleTimeString());
 
+  const lastSavedJsonRef = useRef<string>(JSON.stringify(course));
+  const isInitialMount = useRef(true);
+
+  // Detect form data changes and set sync status to pending
   useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        setAutoSaveStatus('saving');
-        const res = await fetch(`/api/courses/${course.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData)
-        });
-        if (res.ok) {
-          const updated = await res.json();
-          onUpdateCourse(updated);
-          setAutoSaveStatus('saved');
-          setLastSavedTime(new Date().toLocaleTimeString());
-        }
-      } catch (e) {
-        console.error('Auto-save error:', e);
-        setAutoSaveStatus('unsaved');
-      }
-    }, 30000);
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    const currentJson = JSON.stringify(formData);
+    if (currentJson !== lastSavedJsonRef.current) {
+      setSyncStatus('pending');
+    }
+  }, [formData]);
 
-    return () => clearInterval(interval);
-  }, [formData, course.id]);
-
-  const handleSaveOverview = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
+  // Execute sync to server
+  const triggerSync = async () => {
+    setSyncStatus('saving');
     try {
       const res = await fetch(`/api/courses/${course.id}`, {
         method: 'PUT',
@@ -56,15 +46,43 @@ export function CourseEditor({ course, onBack, onUpdateCourse, onExportCourse }:
       if (res.ok) {
         const updated = await res.json();
         onUpdateCourse(updated);
-        setAutoSaveStatus('saved');
+        lastSavedJsonRef.current = JSON.stringify(formData);
+        setSyncStatus('synced');
         setLastSavedTime(new Date().toLocaleTimeString());
-        alert('Course overview saved successfully!');
+      } else {
+        setSyncStatus('error');
       }
     } catch (e) {
-      console.error(e);
-    } finally {
-      setSaving(false);
+      console.error('Auto-save sync error:', e);
+      setSyncStatus('error');
     }
+  };
+
+  // Debounced auto-save effect when status is pending
+  useEffect(() => {
+    if (syncStatus !== 'pending') return;
+
+    const timer = setTimeout(() => {
+      triggerSync();
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [syncStatus, formData, course.id]);
+
+  // Backup periodic auto-save interval (every 30s)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (JSON.stringify(formData) !== lastSavedJsonRef.current) {
+        triggerSync();
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [formData, course.id]);
+
+  const handleSaveOverview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await triggerSync();
   };
 
   return (
@@ -90,11 +108,74 @@ export function CourseEditor({ course, onBack, onUpdateCourse, onExportCourse }:
           </div>
         </div>
 
-        <div className="flex items-center space-x-4">
-          <div className="hidden sm:flex items-center space-x-2 text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-            <span className={`w-2 h-2 rounded-full ${autoSaveStatus === 'saving' ? 'bg-amber-500 animate-pulse' : autoSaveStatus === 'saved' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-            <span>{autoSaveStatus === 'saving' ? 'Auto-saving...' : autoSaveStatus === 'saved' ? `Auto-saved (${lastSavedTime})` : 'Unsaved'}</span>
+        {/* Sync Status Indicator & Actions */}
+        <div className="flex items-center space-x-3">
+          <div
+            onClick={() => (syncStatus === 'pending' || syncStatus === 'error') && triggerSync()}
+            title={
+              syncStatus === 'pending'
+                ? 'Changes pending auto-save. Click to sync immediately.'
+                : syncStatus === 'error'
+                ? 'Sync failed. Click to retry.'
+                : `Synced with server at ${lastSavedTime}`
+            }
+            className={`flex items-center space-x-2.5 px-3.5 py-2 rounded-xl border text-xs font-medium transition-all ${
+              syncStatus === 'pending' || syncStatus === 'error'
+                ? 'cursor-pointer hover:shadow-xs hover:scale-[1.01]'
+                : ''
+            } ${
+              syncStatus === 'synced'
+                ? 'bg-emerald-50/80 border-emerald-200 text-emerald-800'
+                : syncStatus === 'saving'
+                ? 'bg-indigo-50/80 border-indigo-200 text-indigo-800'
+                : syncStatus === 'pending'
+                ? 'bg-amber-50/80 border-amber-200 text-amber-800 shadow-2xs'
+                : 'bg-rose-50/80 border-rose-200 text-rose-800'
+            }`}
+          >
+            <div className="relative flex items-center justify-center">
+              {syncStatus === 'synced' && (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              )}
+              {syncStatus === 'saving' && (
+                <Loader2 className="w-4 h-4 text-indigo-600 animate-spin" />
+              )}
+              {syncStatus === 'pending' && (
+                <Clock className="w-4 h-4 text-amber-600 animate-pulse" />
+              )}
+              {syncStatus === 'error' && (
+                <AlertCircle className="w-4 h-4 text-rose-600" />
+              )}
+            </div>
+
+            <div className="flex flex-col">
+              <div className="flex items-center space-x-1.5 font-semibold">
+                <span>Sync Status:</span>
+                <span className="capitalize">
+                  {syncStatus === 'synced' && 'Synced'}
+                  {syncStatus === 'saving' && 'Saving...'}
+                  {syncStatus === 'pending' && 'Pending'}
+                  {syncStatus === 'error' && 'Failed'}
+                </span>
+                {syncStatus === 'pending' && (
+                  <span className="text-[10px] bg-amber-200/80 text-amber-900 px-1.5 py-0.2 rounded-full font-bold uppercase tracking-wider">
+                    Queued
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] opacity-80 font-normal">
+                {syncStatus === 'synced' && `Up to date (${lastSavedTime})`}
+                {syncStatus === 'saving' && 'Syncing with server...'}
+                {syncStatus === 'pending' && 'Auto-save scheduled • Click to sync'}
+                {syncStatus === 'error' && 'Click to retry sync'}
+              </span>
+            </div>
+
+            {(syncStatus === 'pending' || syncStatus === 'error') && (
+              <RefreshCw className="w-3.5 h-3.5 opacity-70 ml-1" />
+            )}
           </div>
+
           <button
             onClick={() => onExportCourse(formData)}
             className="px-4 py-2 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 text-xs font-semibold hover:bg-purple-100 transition-colors"
@@ -176,11 +257,11 @@ export function CourseEditor({ course, onBack, onUpdateCourse, onExportCourse }:
                 <h3 className="text-lg font-bold text-slate-900">Course Metadata & Overview</h3>
                 <button
                   type="submit"
-                  disabled={saving}
-                  className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 shadow-md transition-all flex items-center space-x-2"
+                  disabled={syncStatus === 'saving'}
+                  className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 shadow-md transition-all flex items-center space-x-2 disabled:opacity-50"
                 >
                   <Save className="w-4 h-4" />
-                  <span>{saving ? 'Saving...' : 'Save Changes'}</span>
+                  <span>{syncStatus === 'saving' ? 'Saving...' : 'Save Changes'}</span>
                 </button>
               </div>
 
