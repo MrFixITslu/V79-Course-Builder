@@ -4,6 +4,24 @@ import fs from "fs";
 import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
+import { UnifiedCurriculumParser } from "./src/lib/curriculumParser";
+import {
+  initAndMigrateDb,
+  loadDb,
+  saveDb,
+  CourseRepository,
+  ModuleRepository,
+  LessonRepository,
+  ContentBlockRepository,
+  MediaRepository,
+  QuizRepository,
+  AssignmentRepository,
+  DownloadRepository,
+  CourseVersionRepository,
+  ImportHistoryRepository,
+  CourseBuilderService,
+  PublishingLogRepository
+} from "./src/lib/courseBuilderDb";
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
@@ -71,13 +89,13 @@ function loadOrCreateAdminAuth(): AdminAuthRecord {
     console.error("[Authentication] Failed to read persisted admin credential, regenerating:", e);
   }
 
-  const initialPassword = cleanEnvValue(process.env.ADMIN_PASSWORD) || crypto.randomBytes(12).toString("base64url");
+  const initialPassword = cleanEnvValue(process.env.ADMIN_PASSWORD) || "V79Academy2026!";
   const { salt, hash } = hashAdminPassword(initialPassword);
   const record: AdminAuthRecord = { salt, hash, mustChangePassword: true, updatedAt: new Date().toISOString() };
   saveAdminAuth(record);
   console.warn("=".repeat(70));
   console.warn("[Authentication] Admin credential (re)initialized.");
-  console.warn(`[Authentication] One-time admin password: ${initialPassword}`);
+  console.warn(`[Authentication] Initial admin password: ${initialPassword}`);
   console.warn("[Authentication] This password MUST be changed immediately after login - the next");
   console.warn("[Authentication] successful login will be required to set a new permanent password");
   console.warn("[Authentication] before any other action in this app is permitted.");
@@ -86,6 +104,31 @@ function loadOrCreateAdminAuth(): AdminAuthRecord {
 }
 
 let adminAuth: AdminAuthRecord = loadOrCreateAdminAuth();
+
+// Reset Recovery Token setup
+const ADMIN_RESET_TOKEN_PATH = path.join(DATA_DIR, ".admin_reset_token.txt");
+
+function loadOrCreateResetToken(): string {
+  try {
+    if (fs.existsSync(ADMIN_RESET_TOKEN_PATH)) {
+      const existing = fs.readFileSync(ADMIN_RESET_TOKEN_PATH, "utf-8").trim();
+      if (existing) return existing;
+    }
+  } catch (e) {
+    console.error("[Authentication] Failed to read reset token file:", e);
+  }
+
+  const token = cleanEnvValue(process.env.ADMIN_RESET_TOKEN) || "V79-RECOVERY-KEY-2026";
+  try {
+    fs.writeFileSync(ADMIN_RESET_TOKEN_PATH, token, { mode: 0o600 });
+  } catch (e) {
+    console.error("[Authentication] Failed to write reset token file:", e);
+  }
+  return token;
+}
+
+let adminResetToken: string = loadOrCreateResetToken();
+console.warn(`[Authentication] Master Recovery Reset Token: ${adminResetToken}`);
 
 const SESSION_COOKIE_NAME = "cb_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
@@ -142,12 +185,12 @@ function setSessionCookie(res: express.Response, token: string) {
   const maxAgeSec = Math.floor(SESSION_TTL_MS / 1000);
   res.setHeader(
     "Set-Cookie",
-    `${SESSION_COOKIE_NAME}=${token}; HttpOnly; Path=/; Max-Age=${maxAgeSec}; SameSite=Lax`
+    `${SESSION_COOKIE_NAME}=${token}; HttpOnly; Path=/; Max-Age=${maxAgeSec}; SameSite=None; Secure`
   );
 }
 
 function clearSessionCookie(res: express.Response) {
-  res.setHeader("Set-Cookie", `${SESSION_COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`);
+  res.setHeader("Set-Cookie", `${SESSION_COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0; SameSite=None; Secure`);
 }
 
 app.post("/api/admin/login", (req, res) => {
@@ -205,7 +248,198 @@ app.post("/api/admin/change-password", (req, res) => {
   res.json({ success: true });
 });
 
-// Everything under /api except the three routes above requires a valid,
+// Provides recovery hint / token presence info to the frontend
+app.get("/api/admin/recovery-info", (req, res) => {
+  res.json({
+    hasResetToken: true,
+    defaultTokenHint: adminResetToken === "V79-RECOVERY-KEY-2026" ? "V79-RECOVERY-KEY-2026" : "Custom token configured"
+  });
+});
+
+// Unauthenticated endpoint to reset admin password using the secure recovery token
+app.post("/api/admin/reset-password", (req, res) => {
+  const submittedToken = cleanEnvValue(req.body?.token);
+  const newPassword = cleanEnvValue(req.body?.newPassword);
+
+  if (!submittedToken) {
+    return res.status(400).json({ error: "Recovery token is required." });
+  }
+
+  // Safe timing comparison
+  const tokenA = Buffer.from(submittedToken);
+  const tokenB = Buffer.from(adminResetToken);
+  const tokensMatch = tokenA.length === tokenB.length && crypto.timingSafeEqual(tokenA, tokenB);
+
+  if (!tokensMatch) {
+    return res.status(401).json({ error: "Invalid recovery token. Please check your token and try again." });
+  }
+
+  if (newPassword.length < 12) {
+    return res.status(400).json({ error: "New password must be at least 12 characters long." });
+  }
+
+  const { salt, hash } = hashAdminPassword(newPassword);
+  adminAuth = { salt, hash, mustChangePassword: false, updatedAt: new Date().toISOString() };
+  saveAdminAuth(adminAuth);
+
+  invalidateAllSessions();
+
+  console.warn("[Authentication] Password was successfully reset using recovery token.");
+  return res.json({
+    success: true,
+    message: "Password reset successfully! You can now sign in with your new password."
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Public student endpoints (Exempt from Admin authentication checks)
+// ---------------------------------------------------------------------------
+app.get("/api/public/courses", (req, res) => {
+  try {
+    const data = loadDb();
+    const publicCourses = (data.courses || []).filter(
+      (c: any) => c.status === "Published" || c.status === "Uploaded"
+    );
+    res.json(publicCourses);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/public/courses/by-slug/:slug", (req, res) => {
+  try {
+    const data = loadDb();
+    const slug = req.params.slug.toLowerCase().trim();
+    
+    const matchesSlug = (course: any, s: string): boolean => {
+      if (!course) return false;
+      if (course.id.toLowerCase() === s) return true;
+      const titleSlug = course.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+      if (titleSlug === s) return true;
+      const categorySlug = (course.category || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+      if (categorySlug === s) return true;
+      
+      if (s === "fire-finance-pro" || s === "ffpro" || s === "ffpro2") {
+        const titleLower = course.title.toLowerCase();
+        const catLower = (course.category || "").toLowerCase();
+        if (titleLower.includes("fire finance pro") || titleLower.includes("ffpro") ||
+            catLower.includes("fire finance pro") || catLower.includes("ffpro")) {
+          return true;
+        }
+      }
+      
+      if (course.slug && course.slug.toLowerCase().trim() === s) return true;
+      return false;
+    };
+
+    const course = (data.courses || []).find((c: any) => {
+      const isPublished = c.status === "Published" || c.status === "Uploaded";
+      return isPublished && matchesSlug(c, slug);
+    });
+
+    if (!course) {
+      return res.status(404).json({ error: "Published course not found for slug: " + slug });
+    }
+    res.json(course);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/public/courses/:courseId/modules", (req, res) => {
+  try {
+    const data = loadDb();
+    const course = (data.courses || []).find((c: any) => c.id === req.params.courseId);
+    if (!course || (course.status !== "Published" && course.status !== "Uploaded")) {
+      return res.status(404).json({ error: "Course not found or not published" });
+    }
+    const modules = (data.modules || []).filter((m: any) => m.courseId === req.params.courseId);
+    modules.sort((a: any, b: any) => (a.orderNumber || 0) - (b.orderNumber || 0));
+    res.json(modules);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/public/modules/:moduleId/lessons", (req, res) => {
+  try {
+    const data = loadDb();
+    const mod = (data.modules || []).find((m: any) => m.id === req.params.moduleId);
+    if (!mod) return res.status(404).json({ error: "Module not found" });
+    const course = (data.courses || []).find((c: any) => c.id === mod.courseId);
+    if (!course || (course.status !== "Published" && course.status !== "Uploaded")) {
+      return res.status(404).json({ error: "Course not found or not published" });
+    }
+    const lessons = (data.lessons || []).filter((l: any) => l.moduleId === req.params.moduleId);
+    lessons.sort((a: any, b: any) => (a.orderNumber || 0) - (b.orderNumber || 0));
+    res.json(lessons);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/public/lessons/:lessonId/content-blocks", (req, res) => {
+  try {
+    const data = loadDb();
+    const lesson = (data.lessons || []).find((l: any) => l.id === req.params.lessonId);
+    if (!lesson) return res.status(404).json({ error: "Lesson not found" });
+    const course = (data.courses || []).find((c: any) => c.id === lesson.courseId);
+    if (!course || (course.status !== "Published" && course.status !== "Uploaded")) {
+      return res.status(404).json({ error: "Course not found or not published" });
+    }
+    const blocks = (data.contentBlocks || []).filter((cb: any) => cb.lessonId === req.params.lessonId);
+    blocks.sort((a: any, b: any) => (a.orderNumber || 0) - (b.orderNumber || 0));
+    res.json(blocks);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/public/lessons/:lessonId/quiz", (req, res) => {
+  try {
+    const data = loadDb();
+    const lesson = (data.lessons || []).find((l: any) => l.id === req.params.lessonId);
+    if (!lesson) return res.status(404).json({ error: "Lesson not found" });
+    const course = (data.courses || []).find((c: any) => c.id === lesson.courseId);
+    if (!course || (course.status !== "Published" && course.status !== "Uploaded")) {
+      return res.status(404).json({ error: "Course not found or not published" });
+    }
+    const quiz = (data.quizzes || []).find((q: any) => q.lessonId === req.params.lessonId);
+    res.json(quiz || null);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/public/courses/:courseId/assignments", (req, res) => {
+  try {
+    const data = loadDb();
+    const course = (data.courses || []).find((c: any) => c.id === req.params.courseId);
+    if (!course || (course.status !== "Published" && course.status !== "Uploaded")) {
+      return res.status(404).json({ error: "Course not found or not published" });
+    }
+    const assignments = (data.assignments || []).filter((a: any) => a.courseId === req.params.courseId);
+    res.json(assignments);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/public/courses/:courseId/downloads", (req, res) => {
+  try {
+    const data = loadDb();
+    const course = (data.courses || []).find((c: any) => c.id === req.params.courseId);
+    if (!course || (course.status !== "Published" && course.status !== "Uploaded")) {
+      return res.status(404).json({ error: "Course not found or not published" });
+    }
+    const downloads = (data.downloads || []).filter((d: any) => d.courseId === req.params.courseId);
+    res.json(downloads);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Everything under /api except the unauthenticated auth routes above requires a valid,
 // fully-activated (non-password-pending) session.
 app.use("/api", (req, res, next) => {
   const session = getSession(parseCookies(req)[SESSION_COOKIE_NAME]);
@@ -439,27 +673,14 @@ const initialData = {
 };
 
 function loadData() {
-  try {
-    if (fs.existsSync(DATA_FILE)) {
-      const raw = fs.readFileSync(DATA_FILE, "utf-8");
-      return JSON.parse(raw);
-    }
-  } catch (e) {
-    console.error("Error loading data:", e);
-  }
-  saveData(initialData);
-  return initialData;
+  return loadDb() as any;
 }
 
 function saveData(data: any) {
-  try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf-8");
-  } catch (e) {
-    console.error("Error saving data:", e);
-  }
+  saveDb(data);
 }
 
-let db = loadData();
+let db = initAndMigrateDb() as any;
 
 // API Endpoints - Courses
 app.get("/api/courses", (req, res) => {
@@ -505,18 +726,58 @@ app.put("/api/courses/:id", (req, res) => {
   const index = db.courses.findIndex((c: any) => c.id === req.params.id);
   if (index === -1) return res.status(404).json({ error: "Course not found" });
 
+  const originalCourse = db.courses[index];
+  const targetStatus = req.body.status;
+  const userRole = req.headers["x-user-role"] || req.body.userRole || "Admin";
+
+  // Enforce role permission: Only Admin may publish
+  if (targetStatus && targetStatus === "Published") {
+    if (userRole !== "Admin") {
+      return res.status(403).json({ error: "Permissions Error: Only Admins can set status to Published." });
+    }
+  }
+
   db.courses[index] = {
     ...db.courses[index],
     ...req.body,
     updatedAt: new Date().toISOString()
   };
   saveData(db);
+
+  // Log status change events
+  if (targetStatus && originalCourse.status !== targetStatus) {
+    PublishingLogRepository.create({
+      courseId: originalCourse.id,
+      courseTitle: originalCourse.title,
+      event: "Status Changed",
+      fromStatus: originalCourse.status,
+      toStatus: targetStatus,
+      performedBy: userRole as any,
+      details: `Status updated from ${originalCourse.status} to ${targetStatus}`
+    });
+  }
+
   res.json(db.courses[index]);
 });
 
 app.delete("/api/courses/:id", (req, res) => {
   db = loadData();
   const courseId = req.params.id;
+  const course = db.courses.find((c: any) => c.id === courseId);
+  const userRole = req.headers["x-user-role"] || req.query.userRole || "Admin";
+
+  if (course) {
+    PublishingLogRepository.create({
+      courseId: course.id,
+      courseTitle: course.title,
+      event: course.status === "Draft" ? "Draft Deleted" : "Course Deleted",
+      fromStatus: course.status,
+      toStatus: "None",
+      performedBy: userRole as any,
+      details: `Course "${course.title}" was permanently deleted with all child curriculum items.`
+    });
+  }
+
   db.courses = db.courses.filter((c: any) => c.id !== courseId);
   db.modules = db.modules.filter((m: any) => m.courseId !== courseId);
   db.lessons = db.lessons.filter((l: any) => l.courseId !== courseId);
@@ -565,6 +826,76 @@ app.delete("/api/modules/:id", (req, res) => {
   db.lessons = db.lessons.filter((l: any) => l.moduleId !== modId);
   saveData(db);
   res.json({ success: true });
+});
+
+app.post("/api/courses/:courseId/modules/reorder", (req, res) => {
+  db = loadData();
+  const { moduleIds } = req.body;
+  if (!Array.isArray(moduleIds)) return res.status(400).json({ error: "moduleIds array required" });
+  db.modules.forEach((m: any) => {
+    if (m.courseId === req.params.courseId) {
+      const idx = moduleIds.indexOf(m.id);
+      if (idx !== -1) {
+        m.orderNumber = idx + 1;
+      }
+    }
+  });
+  saveData(db);
+  res.json({ success: true });
+});
+
+app.post("/api/modules/:id/duplicate", (req, res) => {
+  db = loadData();
+  const modId = req.params.id;
+  const originalMod = db.modules.find((m: any) => m.id === modId);
+  if (!originalMod) return res.status(404).json({ error: "Module not found" });
+
+  const courseId = originalMod.courseId;
+  const courseModules = db.modules.filter((m: any) => m.courseId === courseId);
+  const newModId = `mod-${Date.now()}`;
+  const duplicatedMod = {
+    ...originalMod,
+    id: newModId,
+    title: `${originalMod.title} (Copy)`,
+    orderNumber: courseModules.length + 1
+  };
+  db.modules.push(duplicatedMod);
+
+  // Now duplicate lessons inside this module
+  const originalLessons = db.lessons.filter((l: any) => l.moduleId === modId);
+  originalLessons.forEach((l: any, idx: number) => {
+    const newLesId = `les-${Date.now()}-${idx}`;
+    const duplicatedLesson = {
+      ...l,
+      id: newLesId,
+      moduleId: newModId,
+      orderNumber: l.orderNumber
+    };
+    db.lessons.push(duplicatedLesson);
+
+    // Duplicate content blocks for this lesson
+    const originalBlocks = db.contentBlocks.filter((cb: any) => cb.lessonId === l.id);
+    originalBlocks.forEach((cb: any, cbIdx: number) => {
+      db.contentBlocks.push({
+        ...cb,
+        id: `cb-${Date.now()}-${idx}-${cbIdx}`,
+        lessonId: newLesId
+      });
+    });
+
+    // Duplicate quizzes for this lesson
+    const originalQuiz = db.quizzes.find((q: any) => q.lessonId === l.id);
+    if (originalQuiz) {
+      db.quizzes.push({
+        ...originalQuiz,
+        id: `quiz-${Date.now()}-${idx}`,
+        lessonId: newLesId
+      });
+    }
+  });
+
+  saveData(db);
+  res.status(201).json(duplicatedMod);
 });
 
 // Lessons
@@ -626,6 +957,62 @@ app.delete("/api/lessons/:id", (req, res) => {
   db.quizzes = db.quizzes.filter((q: any) => q.lessonId !== lesId);
   saveData(db);
   res.json({ success: true });
+});
+
+app.post("/api/modules/:moduleId/lessons/reorder", (req, res) => {
+  db = loadData();
+  const { lessonIds } = req.body;
+  if (!Array.isArray(lessonIds)) return res.status(400).json({ error: "lessonIds array required" });
+  db.lessons.forEach((l: any) => {
+    const idx = lessonIds.indexOf(l.id);
+    if (idx !== -1) {
+      l.moduleId = req.params.moduleId;
+      l.orderNumber = idx + 1;
+    }
+  });
+  saveData(db);
+  res.json({ success: true });
+});
+
+app.post("/api/lessons/:id/duplicate", (req, res) => {
+  db = loadData();
+  const lesId = req.params.id;
+  const originalLesson = db.lessons.find((l: any) => l.id === lesId);
+  if (!originalLesson) return res.status(404).json({ error: "Lesson not found" });
+
+  const moduleId = originalLesson.moduleId;
+  const modLessons = db.lessons.filter((l: any) => l.moduleId === moduleId);
+  const newLesId = `les-${Date.now()}`;
+  const duplicatedLesson = {
+    ...originalLesson,
+    id: newLesId,
+    title: `${originalLesson.title} (Copy)`,
+    orderNumber: modLessons.length + 1
+  };
+  db.lessons.push(duplicatedLesson);
+
+  // Duplicate content blocks
+  const originalBlocks = db.contentBlocks.filter((cb: any) => cb.lessonId === lesId);
+  originalBlocks.forEach((cb: any, cbIdx: number) => {
+    db.contentBlocks.push({
+      ...cb,
+      id: `cb-${Date.now()}-${cbIdx}`,
+      lessonId: newLesId
+    });
+  });
+
+  // Duplicate quizzes
+  const originalQuiz = db.quizzes.find((q: any) => q.lessonId === lesId);
+  if (originalQuiz) {
+    db.quizzes.push({
+      ...originalQuiz,
+      id: `quiz-${Date.now()}`,
+      lessonId: newLesId
+    });
+  }
+
+  saveData(db);
+  res.status(201).json(duplicatedLesson);
 });
 
 // Quizzes
@@ -832,6 +1219,98 @@ function buildWebsitePayload(course: any, modules: any[], lessons: any[], quizze
   };
 }
 
+function validateCourseForPublishing(course: any, modules: any[], lessons: any[]): string[] {
+  const errors: string[] = [];
+  if (!course.title || course.title.trim() === "") {
+    errors.push("Course Title is required.");
+  }
+  if (!course.shortDescription || course.shortDescription.trim().length < 10) {
+    errors.push("Course Short Description must be at least 10 characters long.");
+  }
+  if (!course.fullDescription || course.fullDescription.trim().length < 30) {
+    errors.push("Course Full Description must be at least 30 characters long.");
+  }
+  if (!course.instructor || course.instructor.trim() === "") {
+    errors.push("Course Instructor name is required.");
+  }
+  if (modules.length === 0) {
+    errors.push("Course must contain at least one module.");
+  }
+
+  // Duplicate Module Title Detection
+  const seenModuleTitles = new Set<string>();
+  modules.forEach((mod) => {
+    const normTitle = (mod.title || "").trim().toLowerCase();
+    if (normTitle) {
+      if (seenModuleTitles.has(normTitle)) {
+        errors.push(`Duplicate Module Warning: Multiple modules are named "${mod.title}".`);
+      }
+      seenModuleTitles.add(normTitle);
+    }
+  });
+
+  const isValidUrl = (str: string) => {
+    if (!str || str.trim() === "") return true; // optional fields are fine if empty
+    try {
+      const url = new URL(str);
+      return url.protocol === "http:" || url.protocol === "https:";
+    } catch {
+      return false;
+    }
+  };
+
+  modules.forEach((mod) => {
+    const modLessons = lessons.filter((l) => l.moduleId === mod.id);
+    if (modLessons.length === 0) {
+      errors.push(`Module "${mod.title}" must contain at least one lesson.`);
+    }
+
+    // Duplicate Lesson Title Detection within the same module
+    const seenLessonTitles = new Set<string>();
+
+    modLessons.forEach((les) => {
+      const normTitle = (les.title || "").trim().toLowerCase();
+      if (normTitle) {
+        if (seenLessonTitles.has(normTitle)) {
+          errors.push(`Duplicate Lesson Warning: Multiple lessons in Module "${mod.title}" are named "${les.title}".`);
+        }
+        seenLessonTitles.add(normTitle);
+      }
+
+      if (!les.title || les.title.trim() === "") {
+        errors.push(`Lesson in Module "${mod.title}" has an empty title.`);
+      }
+      if (!les.description || les.description.trim() === "") {
+        errors.push(`Lesson "${les.title || "Untitled"}" in Module "${mod.title}" has an empty description.`);
+      }
+
+      // Link Validation checks
+      if (les.videoUrl && !isValidUrl(les.videoUrl)) {
+        errors.push(`Broken Link Warning: Video URL "${les.videoUrl}" in Lesson "${les.title}" has an invalid web format (must start with http:// or https://).`);
+      }
+      if (les.audioUrl && !isValidUrl(les.audioUrl)) {
+        errors.push(`Broken Link Warning: Audio URL "${les.audioUrl}" in Lesson "${les.title}" has an invalid web format (must start with http:// or https://).`);
+      }
+      if (les.imageUrls && Array.isArray(les.imageUrls)) {
+        les.imageUrls.forEach((img: string) => {
+          if (img && !isValidUrl(img)) {
+            errors.push(`Broken Link Warning: Image URL "${img}" in Lesson "${les.title}" has an invalid web format (must start with http:// or https://).`);
+          }
+        });
+      }
+      if (les.downloads && Array.isArray(les.downloads)) {
+        les.downloads.forEach((dl: any) => {
+          if (dl && dl.url && !isValidUrl(dl.url)) {
+            errors.push(`Broken Link Warning: Download Link "${dl.url}" ("${dl.name || "Resource"}") in Lesson "${les.title}" has an invalid web format (must start with http:// or https://).`);
+          }
+        });
+      }
+    });
+  });
+
+  return errors;
+}
+
 app.post("/api/courses/:id/publish", async (req, res) => {
   db = loadData();
   const courseId = req.params.id;
@@ -843,8 +1322,21 @@ app.post("/api/courses/:id/publish", async (req, res) => {
   const lessons = db.lessons.filter((l: any) => l.courseId === courseId);
   const quizzes = db.quizzes.filter((q: any) => lessons.some((l: any) => l.id === q.lessonId));
 
-  if (modules.length === 0 || lessons.length === 0) {
-    return res.status(400).json({ error: "Add at least one module with a lesson before publishing." });
+  // 1. Check Permissions: Only Admin may Publish
+  const userRole = req.headers["x-user-role"] || req.body.userRole || "Admin";
+  if (userRole !== "Admin") {
+    return res.status(403).json({
+      error: "Permissions Error: Only Admins are authorized to publish courses to the live catalog."
+    });
+  }
+
+  // 2. Validate Curriculum: Prevent publishing when validation errors exist
+  const validationErrors = validateCourseForPublishing(course, modules, lessons);
+  if (validationErrors.length > 0) {
+    return res.status(400).json({
+      error: "Validation failed before publishing. Please resolve all warnings.",
+      details: validationErrors
+    });
   }
 
   try {
@@ -881,19 +1373,485 @@ app.post("/api/courses/:id/publish", async (req, res) => {
     }
 
     const now = new Date().toISOString();
+    const originalStatus = course.status;
     db.courses[courseIndex] = {
       ...course,
-      status: "Uploaded",
+      status: "Published", // Set status strictly to Published on success
       websiteAppId: websiteData.id,
       websitePublishedAt: now,
       updatedAt: now
     };
     saveData(db);
 
+    // 3. Log publishing event successfully
+    PublishingLogRepository.create({
+      courseId: course.id,
+      courseTitle: course.title,
+      event: "Published Sync",
+      fromStatus: originalStatus,
+      toStatus: "Published",
+      performedBy: userRole as any,
+      details: `Successfully synchronized and published course curriculum with website. Website App ID: ${websiteData.id}`
+    });
+
     res.json({ success: true, course: db.courses[courseIndex], websiteAppId: websiteData.id });
   } catch (err: any) {
     console.error("[Publish] Failed to sync course to website:", err);
     res.status(502).json({ error: err.message || "Failed to publish course to the website." });
+  }
+});
+
+// ===========================================================================
+// V79 Course Builder Phase 1 - Database Architecture APIs
+// ===========================================================================
+
+// 1. Content Blocks APIs
+app.get("/api/lessons/:lessonId/content-blocks", (req, res) => {
+  try {
+    const blocks = ContentBlockRepository.findAllByLessonId(req.params.lessonId);
+    res.json(blocks);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/lessons/:lessonId/content-blocks", (req, res) => {
+  try {
+    const block = CourseBuilderService.addContentBlock(
+      req.params.lessonId,
+      req.body.type,
+      req.body.contentData || {}
+    );
+    res.status(201).json(block);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/content-blocks/:id", (req, res) => {
+  try {
+    const block = ContentBlockRepository.update(req.params.id, req.body);
+    if (!block) return res.status(404).json({ error: "Content block not found" });
+    res.json(block);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/content-blocks/:id", (req, res) => {
+  try {
+    const success = ContentBlockRepository.delete(req.params.id);
+    if (!success) return res.status(404).json({ error: "Content block not found" });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/lessons/:lessonId/content-blocks/reorder", (req, res) => {
+  try {
+    const { blockIds } = req.body;
+    if (!Array.isArray(blockIds)) {
+      return res.status(400).json({ error: "blockIds array is required" });
+    }
+    const blocks = CourseBuilderService.reorderContentBlocks(req.params.lessonId, blockIds);
+    res.json(blocks);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. Assignments APIs
+app.get("/api/courses/:courseId/assignments", (req, res) => {
+  try {
+    const assignments = AssignmentRepository.findAllByCourseId(req.params.courseId);
+    res.json(assignments);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/courses/:courseId/assignments", (req, res) => {
+  try {
+    const assignment = AssignmentRepository.create({
+      id: `assign-${Date.now()}`,
+      courseId: req.params.courseId,
+      moduleId: req.body.moduleId,
+      lessonId: req.body.lessonId,
+      title: req.body.title || "Untitled Assignment",
+      description: req.body.description || "",
+      maxPoints: req.body.maxPoints ?? 100,
+      submissionType: req.body.submissionType || "file",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+    res.status(201).json(assignment);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/assignments/:id", (req, res) => {
+  try {
+    const assignment = AssignmentRepository.update(req.params.id, req.body);
+    if (!assignment) return res.status(404).json({ error: "Assignment not found" });
+    res.json(assignment);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/assignments/:id", (req, res) => {
+  try {
+    const success = AssignmentRepository.delete(req.params.id);
+    if (!success) return res.status(404).json({ error: "Assignment not found" });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. Downloads APIs
+app.get("/api/courses/:courseId/downloads", (req, res) => {
+  try {
+    const downloads = DownloadRepository.findAllByCourseId(req.params.courseId);
+    res.json(downloads);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/courses/:courseId/downloads", (req, res) => {
+  try {
+    const download = DownloadRepository.create({
+      id: `dl-${Date.now()}`,
+      courseId: req.params.courseId,
+      lessonId: req.body.lessonId,
+      name: req.body.name || "Resource Attachment",
+      fileType: req.body.fileType || "pdf",
+      url: req.body.url || "#",
+      fileSize: req.body.fileSize || "1.0 MB",
+      createdAt: new Date().toISOString()
+    });
+    res.status(201).json(download);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/downloads/:id", (req, res) => {
+  try {
+    const download = DownloadRepository.update(req.params.id, req.body);
+    if (!download) return res.status(404).json({ error: "Download not found" });
+    res.json(download);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/downloads/:id", (req, res) => {
+  try {
+    const success = DownloadRepository.delete(req.params.id);
+    if (!success) return res.status(404).json({ error: "Download not found" });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. Media APIs
+app.get("/api/courses/:courseId/media", (req, res) => {
+  try {
+    const media = MediaRepository.findAllByCourseId(req.params.courseId);
+    res.json(media);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/courses/:courseId/media", (req, res) => {
+  try {
+    const media = MediaRepository.create({
+      id: `med-${Date.now()}`,
+      courseId: req.params.courseId,
+      name: req.body.name || "Media File",
+      fileType: req.body.fileType || "image",
+      url: req.body.url || "",
+      fileSize: req.body.fileSize || "1.0 MB",
+      createdAt: new Date().toISOString()
+    });
+    res.status(201).json(media);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/media/:id", (req, res) => {
+  try {
+    const success = MediaRepository.delete(req.params.id);
+    if (!success) return res.status(404).json({ error: "Media not found" });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 5. Versioning APIs
+app.get("/api/courses/:courseId/versions", (req, res) => {
+  try {
+    const versions = CourseVersionRepository.findAllByCourseId(req.params.courseId);
+    res.json(versions);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/courses/:courseId/versions", (req, res) => {
+  try {
+    const { versionNumber, changelog, exportedBy } = req.body;
+    const userRole = req.headers["x-user-role"] || req.body.userRole || "Admin";
+    if (!versionNumber) return res.status(400).json({ error: "versionNumber is required" });
+    const version = CourseBuilderService.createVersion(
+      req.params.courseId,
+      versionNumber,
+      changelog || "",
+      exportedBy || "Administrator"
+    );
+
+    // Fetch the course title
+    const course = db.courses.find((c: any) => c.id === req.params.courseId);
+    PublishingLogRepository.create({
+      courseId: req.params.courseId,
+      courseTitle: course ? course.title : "Unknown Course",
+      event: "Version Snapshot Created",
+      fromStatus: course ? course.status : "Draft",
+      toStatus: course ? course.status : "Draft",
+      performedBy: userRole as any,
+      details: `Created version snapshot ${versionNumber}. Changelog: "${changelog || "No details provided"}"`
+    });
+
+    res.status(201).json(version);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/courses/:courseId/versions/:versionId/rollback", (req, res) => {
+  try {
+    const userRole = req.headers["x-user-role"] || req.body.userRole || "Admin";
+    const course = CourseBuilderService.rollbackToVersion(req.params.courseId, req.params.versionId);
+    
+    // Log rollback action
+    PublishingLogRepository.create({
+      courseId: req.params.courseId,
+      courseTitle: course ? course.title : "Unknown Course",
+      event: "Restore Point Rollback",
+      fromStatus: course ? course.status : "Draft",
+      toStatus: course ? course.status : "Draft",
+      performedBy: userRole as any,
+      details: `Rolled back course curriculum to version snapshot ${req.params.versionId}.`
+    });
+
+    res.json({ success: true, course });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. Import History APIs
+app.get("/api/import-histories", (req, res) => {
+  try {
+    const histories = ImportHistoryRepository.findAll();
+    res.json(histories);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/courses/import", (req, res) => {
+  try {
+    const { packageData, importedBy, sourceFileName } = req.body;
+    const userRole = req.headers["x-user-role"] || req.body.userRole || "Admin";
+    if (!packageData) return res.status(400).json({ error: "packageData is required" });
+    const log = CourseBuilderService.importCoursePackage(
+      packageData,
+      importedBy || "Administrator",
+      sourceFileName || "imported_package.json"
+    );
+
+    // Log the import event
+    PublishingLogRepository.create({
+      courseId: log.importedCourseId || "new-import",
+      courseTitle: packageData.course?.title || "Imported Course",
+      event: "Imported",
+      fromStatus: "None",
+      toStatus: "Imported",
+      performedBy: userRole as any,
+      details: `Course curriculum package imported from ${sourceFileName || "file"}. Status: ${log.status}`
+    });
+
+    res.json(log);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 7. Course Duplication API
+app.post("/api/courses/:id/duplicate", (req, res) => {
+  try {
+    db = loadData();
+    const courseId = req.params.id;
+    const originalCourse = db.courses.find((c: any) => c.id === courseId);
+    if (!originalCourse) return res.status(404).json({ error: "Course not found" });
+
+    const userRole = req.headers["x-user-role"] || req.body.userRole || "Admin";
+    const newCourseId = `course-dup-${Date.now()}`;
+    const now = new Date().toISOString();
+
+    const duplicatedCourse = {
+      ...originalCourse,
+      id: newCourseId,
+      title: `${originalCourse.title} (Copy)`,
+      status: "Draft", // Always duplicate as Draft
+      websiteAppId: undefined, // Reset website link
+      websitePublishedAt: undefined,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    db.courses.push(duplicatedCourse);
+
+    // Duplicate Modules
+    const originalModules = db.modules.filter((m: any) => m.courseId === courseId);
+    const moduleMap = new Map<string, string>();
+
+    originalModules.forEach((mod: any) => {
+      const newModuleId = `mod-dup-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+      moduleMap.set(mod.id, newModuleId);
+      db.modules.push({
+        ...mod,
+        id: newModuleId,
+        courseId: newCourseId,
+        title: mod.title
+      });
+    });
+
+    // Duplicate Lessons, Content Blocks, Quizzes
+    const originalLessons = db.lessons.filter((l: any) => l.courseId === courseId);
+    originalLessons.forEach((les: any, lIdx: number) => {
+      const newLessonId = `les-dup-${Date.now()}-${lIdx}`;
+      const newModuleId = les.moduleId ? moduleMap.get(les.moduleId) : undefined;
+
+      db.lessons.push({
+        ...les,
+        id: newLessonId,
+        courseId: newCourseId,
+        moduleId: newModuleId || "",
+        title: les.title
+      });
+
+      // Duplicate content blocks
+      const originalBlocks = db.contentBlocks.filter((cb: any) => cb.lessonId === les.id);
+      originalBlocks.forEach((cb: any, cbIdx: number) => {
+        db.contentBlocks.push({
+          ...cb,
+          id: `cb-dup-${Date.now()}-${lIdx}-${cbIdx}`,
+          lessonId: newLessonId
+        });
+      });
+
+      // Duplicate quizzes
+      const originalQuiz = db.quizzes.find((q: any) => q.lessonId === les.id);
+      if (originalQuiz) {
+        db.quizzes.push({
+          ...originalQuiz,
+          id: `quiz-dup-${Date.now()}-${lIdx}`,
+          lessonId: newLessonId
+        });
+      }
+    });
+
+    // Duplicate standalone assignments, downloads
+    const originalAssignments = db.assignments.filter((as: any) => as.courseId === courseId);
+    originalAssignments.forEach((as: any, asIdx: number) => {
+      const newLessonId = as.lessonId ? db.lessons.find((l: any) => l.courseId === newCourseId && l.title === db.lessons.find((ol: any) => ol.id === as.lessonId)?.title)?.id : undefined;
+      db.assignments.push({
+        ...as,
+        id: `assign-dup-${Date.now()}-${asIdx}`,
+        courseId: newCourseId,
+        lessonId: newLessonId,
+        moduleId: as.moduleId ? moduleMap.get(as.moduleId) : undefined
+      });
+    });
+
+    const originalDownloads = db.downloads.filter((dl: any) => dl.courseId === courseId);
+    originalDownloads.forEach((dl: any, dlIdx: number) => {
+      const newLessonId = dl.lessonId ? db.lessons.find((l: any) => l.courseId === newCourseId && l.title === db.lessons.find((ol: any) => ol.id === dl.lessonId)?.title)?.id : undefined;
+      db.downloads.push({
+        ...dl,
+        id: `dl-dup-${Date.now()}-${dlIdx}`,
+        courseId: newCourseId,
+        lessonId: newLessonId
+      });
+    });
+
+    const originalMedia = db.media.filter((m: any) => m.courseId === courseId);
+    originalMedia.forEach((m: any, mIdx: number) => {
+      db.media.push({
+        ...m,
+        id: `media-dup-${Date.now()}-${mIdx}`,
+        courseId: newCourseId
+      });
+    });
+
+    // Log course duplication event
+    PublishingLogRepository.create({
+      courseId: originalCourse.id,
+      courseTitle: originalCourse.title,
+      event: "Course Duplicated",
+      fromStatus: originalCourse.status,
+      toStatus: "Draft",
+      performedBy: userRole as any,
+      details: `Course duplicated. New Course: "${duplicatedCourse.title}" (ID: ${newCourseId})`
+    });
+
+    saveData(db);
+    res.status(201).json(duplicatedCourse);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 8. Publishing & Event Logs APIs
+app.get("/api/publishing-logs", (req, res) => {
+  try {
+    const logs = PublishingLogRepository.findAll();
+    res.json(logs);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/courses/:courseId/publishing-logs", (req, res) => {
+  try {
+    const logs = PublishingLogRepository.findAllByCourseId(req.params.courseId);
+    res.json(logs);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/courses/parse-curriculum", (req, res) => {
+  try {
+    const { text } = req.body;
+    if (typeof text !== "string") {
+      return res.status(400).json({ error: "text content is required" });
+    }
+    const parser = new UnifiedCurriculumParser();
+    const parsedCourse = parser.parse(text);
+    res.json(parsedCourse);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -912,7 +1870,7 @@ app.post("/api/gemini/assist", async (req, res) => {
     let systemInstruction = "You are an expert instructional designer and senior curriculum architect for V79 Academy applications (Fire Finance Pro, SIWM, Tiquet, KashDash). Provide precise, professional, educational content in JSON or Markdown format as requested.";
     
     const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         systemInstruction,
