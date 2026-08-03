@@ -20,7 +20,15 @@ import {
   Compass,
   CheckSquare,
   HelpCircle,
-  Volume2
+  Volume2,
+  Lock,
+  Unlock,
+  CreditCard,
+  ShieldCheck,
+  DollarSign,
+  Info,
+  Layers,
+  Sparkle
 } from 'lucide-react';
 import { Course, Module, Lesson, Quiz } from '../types';
 import { ContentBlock, Assignment, Download as DownloadType } from '../types/course-builder-v2';
@@ -42,6 +50,18 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [downloads, setDownloads] = useState<any[]>([]);
   
+  // Payment & Enrollment States
+  const [isEnrolled, setIsEnrolled] = useState<boolean>(true);
+  const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
+  const [paymentProcessing, setPaymentProcessing] = useState<boolean>(false);
+  const [paymentSuccessMsg, setPaymentSuccessMsg] = useState<string | null>(null);
+
+  // Payment form mock inputs
+  const [cardName, setCardName] = useState<string>('Alex Mercer');
+  const [cardNumber, setCardNumber] = useState<string>('4242 •••• •••• 4242');
+  const [cardExpiry, setCardExpiry] = useState<string>('12/28');
+  const [cardCvc, setCardCvc] = useState<string>('123');
+
   // States
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +104,24 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
     fetchAllPublished();
   }, []);
 
+  const isCoursePaid = (c: Course | null) => {
+    if (!c) return false;
+    return c.pricingType === 'premium' || (typeof c.price === 'number' && c.price > 0);
+  };
+
+  const isLessonIntro = (les: Lesson, lesIdx: number, modIdx: number) => {
+    if (!les) return false;
+    const titleLower = (les.title || '').toLowerCase();
+    return (modIdx === 0 && lesIdx === 0) || titleLower.includes('intro') || titleLower.includes('overview') || titleLower.includes('welcome');
+  };
+
+  const canAccessLesson = (les: Lesson, lesIdx: number, modIdx: number) => {
+    if (!course) return true;
+    if (!isCoursePaid(course)) return true; // Free course -> everyone has access
+    if (isEnrolled) return true; // Enrolled student -> access everything
+    return isLessonIntro(les, lesIdx, modIdx); // Unenrolled -> intro lesson only
+  };
+
   // Main load course routine
   useEffect(() => {
     if (!courseSlug) return;
@@ -96,8 +134,20 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
         if (!courseRes.ok) {
           throw new Error('Course not found or is currently not published.');
         }
-        const courseData = await courseRes.json();
+        const courseData: Course = await courseRes.json();
         setCourse(courseData);
+
+        // Check paid vs enrolled state
+        const paidCourse = courseData.pricingType === 'premium' || (typeof courseData.price === 'number' && courseData.price > 0);
+        const hasPaidInStorage = localStorage.getItem(`v79_enrolled_${courseData.id}`) === 'true';
+
+        if (paidCourse && !hasPaidInStorage) {
+          setIsEnrolled(false);
+          // Unenrolled students start at the Course Introduction overview
+          setCurrentLesson(null);
+        } else {
+          setIsEnrolled(true);
+        }
 
         // Load progress from localStorage
         const storedProgress = localStorage.getItem(`v79_student_progress_${courseData.id}`);
@@ -127,7 +177,8 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
         // Fetch Lessons for all modules
         const lMap: { [id: string]: Lesson[] } = {};
         let firstLesson: Lesson | null = null;
-        for (const m of modulesData) {
+        for (let mIdx = 0; mIdx < modulesData.length; mIdx++) {
+          const m = modulesData[mIdx];
           const lessonsRes = await fetch(`/api/public/modules/${m.id}/lessons`);
           const lessonsData = await lessonsRes.json();
           lMap[m.id] = lessonsData;
@@ -137,7 +188,8 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
         }
         setLessonsMap(lMap);
 
-        if (firstLesson) {
+        // If course is free or already enrolled, auto-select first lesson
+        if ((!paidCourse || hasPaidInStorage) && firstLesson) {
           setCurrentLesson(firstLesson);
         }
 
@@ -184,7 +236,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
         // Fetch Content Blocks
         const blockRes = await fetch(`/api/public/lessons/${currentLesson.id}/content-blocks`);
         if (blockRes.ok) {
-          const blockData = await blockRes.ok ? await blockRes.json() : [];
+          const blockData = await blockRes.json();
           setContentBlocks(blockData || []);
         }
 
@@ -215,6 +267,40 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
   // Check if a specific lesson is completed
   const isLessonCompleted = (lessonId: string) => {
     return !!completedLessons[lessonId];
+  };
+
+  // Process payment
+  const handleProcessPayment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!course) return;
+    setPaymentProcessing(true);
+    setTimeout(() => {
+      localStorage.setItem(`v79_enrolled_${course.id}`, 'true');
+      setIsEnrolled(true);
+      setPaymentProcessing(false);
+      setShowPaymentModal(false);
+      setPaymentSuccessMsg(`🎉 Payment Successful! You are now fully enrolled in "${course.title}". All modules and lectures are unlocked.`);
+      
+      // Select first lesson
+      if (modules.length > 0 && lessonsMap[modules[0].id]?.length > 0) {
+        setCurrentLesson(lessonsMap[modules[0].id][0]);
+        setCurrentModuleIndex(0);
+      }
+    }, 750);
+  };
+
+  // Toggle demo enrollment status (for quick evaluation)
+  const toggleDemoEnrollment = () => {
+    if (!course) return;
+    const nextState = !isEnrolled;
+    setIsEnrolled(nextState);
+    localStorage.setItem(`v79_enrolled_${course.id}`, nextState ? 'true' : 'false');
+    if (nextState) {
+      setPaymentSuccessMsg("Demo Access Granted: Enrolled mode enabled.");
+    } else {
+      setPaymentSuccessMsg("Demo Mode: Switched to Unenrolled Preview state.");
+      setCurrentLesson(null);
+    }
   };
 
   // Calculate stats
@@ -394,6 +480,8 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
 
   // Find currently active lesson's module name
   const currentModule = modules.find(m => m.id === currentLesson?.moduleId);
+  const paidCourse = isCoursePaid(course);
+  const coursePriceFormatted = course.price && course.price > 0 ? `$${course.price.toFixed(2)}` : '$49.99';
 
   return (
     <div className="min-h-screen bg-slate-50 flex text-slate-800 font-sans antialiased overflow-hidden h-screen">
@@ -404,54 +492,111 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
         {/* Course Core Header */}
         <div className="p-6 border-b border-slate-100 space-y-4 shrink-0 bg-slate-50/50">
           <div>
-            <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md text-[10px] font-bold uppercase tracking-wider">
-              {course.category}
-            </span>
+            <div className="flex items-center justify-between">
+              <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md text-[10px] font-bold uppercase tracking-wider">
+                {course.category}
+              </span>
+              {paidCourse ? (
+                <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold flex items-center gap-1 ${
+                  isEnrolled 
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                    : 'bg-amber-50 text-amber-800 border border-amber-200'
+                }`}>
+                  {isEnrolled ? (
+                    <>
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                      <span>ENROLLED</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-3 h-3 text-amber-600" />
+                      <span>{coursePriceFormatted}</span>
+                    </>
+                  )}
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-[10px] font-bold uppercase">
+                  FREE COURSE
+                </span>
+              )}
+            </div>
+
             <h1 className="text-sm font-bold text-slate-900 mt-2 line-clamp-2 leading-snug">{course.title}</h1>
             <p className="text-[10px] text-slate-400 mt-0.5 font-medium">Instructor: {course.instructor}</p>
           </div>
 
-          {/* Progress Tracker */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-[11px] font-medium text-slate-500">
-              <span>Overall Course Completion</span>
-              <span className="font-bold text-indigo-700">{progressPercent}%</span>
+          {/* Quick Access to Course Introduction / Overview */}
+          <button
+            onClick={() => setCurrentLesson(null)}
+            className={`w-full p-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-between ${
+              currentLesson === null
+                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <BookOpen className="w-4 h-4" />
+              <span>Course Introduction</span>
             </div>
-            <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-              <div 
-                className="bg-indigo-600 h-full rounded-full transition-all duration-500"
-                style={{ width: `${progressPercent}%` }}
-              ></div>
+            <span className="text-[10px] opacity-80 uppercase font-semibold">
+              {!isEnrolled && paidCourse ? 'Preview Intro' : 'Overview'}
+            </span>
+          </button>
+
+          {/* Paywall Callout if unenrolled */}
+          {!isEnrolled && paidCourse && (
+            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/80 space-y-2">
+              <div className="flex items-start gap-2">
+                <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <div className="text-[11px] text-amber-900 font-medium leading-tight">
+                  <p className="font-bold text-amber-950">Payment Required</p>
+                  <p className="mt-0.5 text-amber-800 text-[10px]">
+                    Pay <strong className="font-extrabold">{coursePriceFormatted}</strong> to unlock all modules, videos, assignments, and certificates.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPaymentModal(true)}
+                className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors flex items-center justify-center gap-1.5"
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                <span>Enroll Now ({coursePriceFormatted})</span>
+              </button>
             </div>
-            <div className="flex items-center justify-between text-[10px] text-slate-400 pt-0.5">
-              <span>{completedCount} of {totalLessons} completed</span>
-              {progressPercent === 100 && (
-                <span className="text-emerald-600 font-semibold flex items-center gap-0.5">
-                  Ready for Certificate! 🎓
-                </span>
-              )}
+          )}
+
+          {/* Progress Tracker (Only shown if enrolled or free) */}
+          {isEnrolled && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] font-medium text-slate-500">
+                <span>Course Completion</span>
+                <span className="font-bold text-indigo-700">{progressPercent}%</span>
+              </div>
+              <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                <div 
+                  className="bg-indigo-600 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${progressPercent}%` }}
+                ></div>
+              </div>
+              <div className="flex items-center justify-between text-[10px] text-slate-400 pt-0.5">
+                <span>{completedCount} of {totalLessons} completed</span>
+                {progressPercent === 100 && (
+                  <span className="text-emerald-600 font-semibold flex items-center gap-0.5">
+                    Ready for Certificate! 🎓
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Certificate Badge Callout */}
-          {progressPercent === 100 ? (
+          {isEnrolled && progressPercent === 100 && (
             <button
               onClick={() => setShowCertificate(true)}
               className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5 animate-bounce"
             >
               <Award className="w-4 h-4" />
               Claim Your Certificate
-            </button>
-          ) : (
-            <button
-              onClick={() => {
-                // Pre-fill student name, show what certificate looks like
-                setShowCertificate(true);
-              }}
-              className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold border border-slate-200 transition-all flex items-center justify-center gap-1.5"
-            >
-              <Award className="w-4 h-4 text-slate-400" />
-              Preview Certificate
             </button>
           )}
         </div>
@@ -462,43 +607,72 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
             const moduleLessons = lessonsMap[mod.id] || [];
             return (
               <div key={mod.id} className="space-y-2">
-                <div className="p-2 bg-slate-50 rounded-lg">
-                  <span className="text-[10px] font-bold text-indigo-900/80 uppercase tracking-wider block">
+                <div className="p-2 bg-slate-50 rounded-lg flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-indigo-900/80 uppercase tracking-wider">
                     MODULE {modIdx + 1}
                   </span>
-                  <h3 className="font-bold text-xs text-slate-800 mt-0.5 truncate" title={mod.title}>
-                    {mod.title}
-                  </h3>
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    {moduleLessons.length} lessons
+                  </span>
                 </div>
+                <h3 className="font-bold text-xs text-slate-800 truncate px-1" title={mod.title}>
+                  {mod.title}
+                </h3>
 
                 <div className="space-y-1 pl-1.5 border-l-2 border-slate-100">
                   {moduleLessons.map((les, lesIdx) => {
                     const isActive = currentLesson?.id === les.id;
                     const isComplete = isLessonCompleted(les.id);
+                    const accessible = canAccessLesson(les, lesIdx, modIdx);
+                    const isIntro = isLessonIntro(les, lesIdx, modIdx);
+
                     return (
                       <button
                         key={les.id}
                         onClick={() => {
-                          setCurrentLesson(les);
-                          setCurrentModuleIndex(modIdx);
+                          if (accessible) {
+                            setCurrentLesson(les);
+                            setCurrentModuleIndex(modIdx);
+                          } else {
+                            setShowPaymentModal(true);
+                          }
                         }}
                         className={`w-full text-left p-2 rounded-lg text-xs font-medium flex items-center justify-between transition-all ${
                           isActive
                             ? 'bg-indigo-600 text-white shadow-md'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                            : accessible
+                            ? 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                            : 'text-slate-400 bg-slate-50/50 hover:bg-amber-50/60 hover:text-amber-900 cursor-pointer'
                         }`}
                       >
                         <div className="flex items-center space-x-2 truncate">
-                          {isComplete ? (
+                          {!accessible ? (
+                            <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          ) : isComplete ? (
                             <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-white' : 'text-emerald-500'}`} />
                           ) : (
                             <FileText className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
                           )}
                           <span className="truncate">{lesIdx + 1}. {les.title}</span>
                         </div>
-                        <span className={`text-[9px] opacity-80 shrink-0 ml-1.5 ${isActive ? 'text-white/90' : 'text-slate-400'}`}>
-                          {les.estimatedTime}
-                        </span>
+
+                        <div className="flex items-center gap-1 shrink-0 ml-1.5">
+                          {!isEnrolled && isIntro && (
+                            <span className={`text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-tight ${
+                              isActive ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              Preview
+                            </span>
+                          )}
+                          {!accessible && (
+                            <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase bg-amber-100 text-amber-900">
+                              Locked
+                            </span>
+                          )}
+                          <span className={`text-[9px] opacity-80 ${isActive ? 'text-white/90' : 'text-slate-400'}`}>
+                            {les.estimatedTime}
+                          </span>
+                        </div>
                       </button>
                     );
                   })}
@@ -517,16 +691,19 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
             <GraduationCap className="w-5 h-5 text-indigo-600" />
             <span className="text-xs font-bold text-slate-800">Student Portal</span>
           </div>
-          <button
-            onClick={() => window.location.pathname = '/'}
-            className="text-[10px] font-semibold text-slate-500 hover:text-indigo-600 transition-colors bg-white px-2 py-1 rounded border border-slate-200"
-          >
-            Builder Login
-          </button>
+          {paidCourse && (
+            <button
+              onClick={toggleDemoEnrollment}
+              className="text-[9px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-1 rounded transition-colors"
+              title="Toggle enrollment state for testing"
+            >
+              {isEnrolled ? 'Switch to Unenrolled' : 'Toggle Enrolled'}
+            </button>
+          )}
         </div>
       </aside>
 
-      {/* 2. Main Content Center Screen (Classroom Player) */}
+      {/* 2. Main Content Center Screen (Classroom Player or Introduction View) */}
       <div 
         ref={mainContentRef}
         className="flex-1 overflow-y-auto flex flex-col h-full bg-slate-50"
@@ -536,16 +713,16 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
         <header className="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0 sticky top-0 z-10">
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-slate-400">
-              {currentModule ? `Module ${currentModuleIndex + 1}: ${currentModule.title}` : 'Overview'}
+              {currentLesson && currentModule ? `Module ${currentModuleIndex + 1}: ${currentModule.title}` : 'Course Overview'}
             </span>
             <ChevronRight className="w-4 h-4 text-slate-300" />
             <span className="text-xs font-bold text-slate-800 truncate max-w-sm">
-              {currentLesson ? currentLesson.title : 'Overview'}
+              {currentLesson ? currentLesson.title : 'Course Introduction'}
             </span>
           </div>
           
           <div className="flex items-center gap-3">
-            {currentLesson && (
+            {currentLesson && isEnrolled && (
               <label className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 rounded-xl cursor-pointer transition-all text-xs font-semibold">
                 <input
                   type="checkbox"
@@ -558,13 +735,335 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                 </span>
               </label>
             )}
+
+            {!isEnrolled && paidCourse && (
+              <button
+                onClick={() => setShowPaymentModal(true)}
+                className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5"
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                <span>Enroll for {coursePriceFormatted}</span>
+              </button>
+            )}
           </div>
         </header>
 
-        {/* Lesson View Panel */}
-        {currentLesson ? (
+        {paymentSuccessMsg && (
+          <div className="bg-emerald-600 text-white px-8 py-3 text-xs font-bold flex items-center justify-between shadow-md shrink-0">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>{paymentSuccessMsg}</span>
+            </div>
+            <button 
+              onClick={() => setPaymentSuccessMsg(null)}
+              className="text-emerald-100 hover:text-white p-1 rounded"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* --- VIEW CHOICE: 1) Course Introduction Page OR 2) Active Lesson View --- */}
+        {currentLesson === null ? (
+          /* COURSE INTRODUCTION & OVERVIEW PAGE */
+          <div className="p-8 max-w-4xl mx-auto w-full space-y-8 flex-1">
+            
+            {/* Hero Course Introduction Card */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-xs space-y-6 relative overflow-hidden">
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+                <div className="space-y-3 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 font-bold text-xs rounded-lg border border-indigo-100">
+                      {course.category}
+                    </span>
+                    <span className="px-2.5 py-1 bg-slate-100 text-slate-700 font-semibold text-xs rounded-lg">
+                      Level: {course.difficultyLevel}
+                    </span>
+                    <span className="px-2.5 py-1 bg-slate-100 text-slate-700 font-semibold text-xs rounded-lg flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-slate-500" />
+                      {course.estimatedDuration || '4.5 hours'}
+                    </span>
+                  </div>
+
+                  <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 leading-tight">
+                    {course.title}
+                  </h1>
+
+                  <p className="text-sm text-slate-600 leading-relaxed">
+                    {course.shortDescription || course.fullDescription || 'Welcome to this comprehensive course. Preview the curriculum below and enroll to unlock full access.'}
+                  </p>
+
+                  <div className="flex items-center gap-3 pt-2 text-xs text-slate-500">
+                    <span className="font-semibold text-slate-800">Instructor: {course.instructor}</span>
+                    <span>•</span>
+                    <span>Version {course.courseVersion}</span>
+                  </div>
+                </div>
+
+                {/* Pricing / Enrollment Action Box */}
+                <div className="w-full md:w-72 bg-slate-50 p-6 rounded-2xl border border-slate-200 shrink-0 text-center space-y-4">
+                  {paidCourse ? (
+                    <>
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                          Course Tuition Fee
+                        </span>
+                        <div className="text-3xl font-black text-slate-900">
+                          {coursePriceFormatted}
+                        </div>
+                      </div>
+
+                      {isEnrolled ? (
+                        <div className="p-3 bg-emerald-50 text-emerald-800 rounded-xl border border-emerald-200 text-xs font-bold space-y-1">
+                          <p className="flex items-center justify-center gap-1">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            <span>You are Enrolled!</span>
+                          </p>
+                          <p className="text-[10px] text-emerald-700 font-normal">
+                            Full access enabled. Select any lesson in the sidebar to continue learning.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <button
+                            onClick={() => setShowPaymentModal(true)}
+                            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                          >
+                            <CreditCard className="w-4 h-4" />
+                            <span>Enroll & Pay {coursePriceFormatted}</span>
+                          </button>
+                          <p className="text-[10px] text-slate-400">
+                            Instant full access to all video lectures, quizzes, and course completion certificate.
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="space-y-2">
+                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 inline-block">
+                        100% Free Course
+                      </span>
+                      <p className="text-xs text-slate-500">
+                        This course is open to all students free of charge.
+                      </p>
+                      {modules.length > 0 && lessonsMap[modules[0].id]?.length > 0 && (
+                        <button
+                          onClick={() => {
+                            setCurrentLesson(lessonsMap[modules[0].id][0]);
+                            setCurrentModuleIndex(0);
+                          }}
+                          className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm"
+                        >
+                          Start Learning Now
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Detailed Course Description & Objectives */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="md:col-span-2 space-y-6">
+                
+                {/* Full Description */}
+                <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-3">
+                    <BookOpen className="w-4 h-4 text-indigo-600" />
+                    <span>Course Introduction & Overview</span>
+                  </h3>
+                  <div className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">
+                    {course.fullDescription || course.shortDescription || 'This course offers an in-depth, structured curriculum designed to build practical mastery step-by-step.'}
+                  </div>
+                </div>
+
+                {/* Learning Objectives */}
+                {course.learningObjectives && course.learningObjectives.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-3">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>What You Will Learn</span>
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {course.learningObjectives.map((obj, idx) => (
+                        <div key={idx} className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs text-slate-700 font-medium">
+                          <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                          <span>{obj}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Course Curriculum Breakdown */}
+                <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-indigo-600" />
+                      <span>Course Syllabus ({modules.length} Modules)</span>
+                    </h3>
+                    {!isEnrolled && paidCourse && (
+                      <span className="text-[10px] text-amber-800 bg-amber-50 px-2.5 py-1 rounded-md font-bold border border-amber-200 flex items-center gap-1">
+                        <Lock className="w-3 h-3 text-amber-600" />
+                        <span>Intro Lesson Free Preview</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    {modules.map((m, mIdx) => {
+                      const mLessons = lessonsMap[m.id] || [];
+                      return (
+                        <div key={m.id} className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-900">
+                              Module {mIdx + 1}: {m.title}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-semibold">
+                              {mLessons.length} Lessons
+                            </span>
+                          </div>
+                          {m.description && (
+                            <p className="text-[11px] text-slate-500 leading-snug">{m.description}</p>
+                          )}
+                          <div className="pt-2 space-y-1">
+                            {mLessons.map((les, lIdx) => {
+                              const accessible = canAccessLesson(les, lIdx, mIdx);
+                              const isIntro = isLessonIntro(les, lIdx, mIdx);
+                              return (
+                                <button
+                                  key={les.id}
+                                  onClick={() => {
+                                    if (accessible) {
+                                      setCurrentLesson(les);
+                                      setCurrentModuleIndex(mIdx);
+                                    } else {
+                                      setShowPaymentModal(true);
+                                    }
+                                  }}
+                                  className={`w-full text-left p-2 rounded-lg text-xs font-medium flex items-center justify-between transition-colors ${
+                                    accessible 
+                                      ? 'bg-white hover:bg-indigo-50/70 text-slate-700 border border-slate-200/80' 
+                                      : 'bg-slate-100/80 text-slate-400 border border-slate-200/50 cursor-pointer'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 truncate">
+                                    {!accessible ? (
+                                      <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                    ) : (
+                                      <FileText className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                    )}
+                                    <span className="truncate">{lIdx + 1}. {les.title}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {!isEnrolled && isIntro && (
+                                      <span className="text-[8px] font-extrabold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded uppercase">
+                                        Free Intro Preview
+                                      </span>
+                                    )}
+                                    {!accessible && (
+                                      <span className="text-[8px] font-extrabold bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded uppercase">
+                                        Locked
+                                      </span>
+                                    )}
+                                    <span className="text-[10px] text-slate-400">{les.estimatedTime}</span>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Sidebar Info Column */}
+              <div className="space-y-6">
+                
+                {/* Prerequisites */}
+                {course.prerequisites && course.prerequisites.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-3">
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2">
+                      <Info className="w-4 h-4 text-indigo-600" />
+                      <span>Course Prerequisites</span>
+                    </h4>
+                    <ul className="space-y-2 text-xs text-slate-600">
+                      {course.prerequisites.map((req, idx) => (
+                        <li key={idx} className="flex items-start gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-1.5 shrink-0"></span>
+                          <span>{req}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Enrollment Benefits Card */}
+                <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white rounded-2xl p-6 shadow-lg space-y-4">
+                  <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider">
+                    <Sparkles className="w-4 h-4" />
+                    <span>Included in Enrollment</span>
+                  </div>
+                  <ul className="space-y-2.5 text-xs text-indigo-100 font-medium">
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>Full access to all course modules</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>Interactive quizzes & practical tasks</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>Downloadable resources & worksheets</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>Official Certificate of Completion</span>
+                    </li>
+                  </ul>
+
+                  {!isEnrolled && paidCourse && (
+                    <button
+                      onClick={() => setShowPaymentModal(true)}
+                      className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs shadow-md transition-colors"
+                    >
+                      Unlock Everything ({coursePriceFormatted})
+                    </button>
+                  )}
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+        ) : (
+          /* ACTIVE LESSON VIEW PANEL */
           <div className="p-8 max-w-3xl mx-auto w-full space-y-8 flex-1">
             
+            {/* Unenrolled Banner warning if viewing Intro lesson */}
+            {!isEnrolled && paidCourse && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2.5 text-amber-900">
+                  <Info className="w-5 h-5 text-amber-600 shrink-0" />
+                  <div>
+                    <p className="font-bold">Viewing Free Course Introduction Preview</p>
+                    <p className="text-[11px] text-amber-800">Enroll today to access all remaining modules, quizzes, and certification.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowPaymentModal(true)}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shrink-0 shadow-xs"
+                >
+                  Pay {coursePriceFormatted} to Unlock All
+                </button>
+              </div>
+            )}
+
             {/* 1. Core Lecture Metadata */}
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-xs font-semibold text-indigo-600">
@@ -966,14 +1465,6 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
             </div>
 
           </div>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-8 space-y-4">
-            <BookOpen className="w-16 h-16 text-indigo-200" />
-            <h2 className="text-xl font-bold text-slate-800">Select a Lesson to Begin</h2>
-            <p className="text-xs text-slate-400 max-w-sm">
-              Use the sidebar index to navigate modules and lessons. Your overall progress will be saved automatically as you check off items, pass quizzes, or submit practical tasks.
-            </p>
-          </div>
         )}
       </div>
 
@@ -1020,7 +1511,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
               </div>
             </div>
 
-            {/* CERTIFICATE GRAPHIC (High Elegance) */}
+            {/* CERTIFICATE GRAPHIC */}
             <div 
               id="v79-certificate-canvas"
               className="border-8 border-amber-500/35 bg-white p-12 text-center space-y-8 relative overflow-hidden"
@@ -1079,6 +1570,121 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                 </div>
               </div>
             </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* 4. Payment Checkout Modal */}
+      {showPaymentModal && course && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 space-y-6 relative border border-slate-100 shadow-2xl">
+            
+            <button
+              onClick={() => setShowPaymentModal(false)}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-xl transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 uppercase tracking-wider">
+                <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                <span>Secure Course Enrollment</span>
+              </div>
+              <h2 className="text-xl font-bold text-slate-900">{course.title}</h2>
+              <p className="text-xs text-slate-500">Instructor: {course.instructor}</p>
+            </div>
+
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+              <div className="flex justify-between items-center text-xs text-slate-600">
+                <span>Tuition Fee</span>
+                <span className="font-bold text-slate-800">{coursePriceFormatted}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs text-slate-600">
+                <span>Platform Access & Certificate Fee</span>
+                <span className="text-emerald-600 font-semibold">FREE</span>
+              </div>
+              <div className="border-t border-slate-200 pt-2 flex justify-between items-center text-sm font-bold text-slate-900">
+                <span>Total Due Today</span>
+                <span className="text-indigo-600 text-lg">{coursePriceFormatted}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleProcessPayment} className="space-y-4">
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-slate-700">Cardholder Name</label>
+                <input
+                  type="text"
+                  required
+                  value={cardName}
+                  onChange={(e) => setCardName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 focus:bg-white focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-slate-700">Card Number</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    value={cardNumber}
+                    onChange={(e) => setCardNumber(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-800 font-mono focus:bg-white focus:ring-1 focus:ring-indigo-500"
+                  />
+                  <CreditCard className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-slate-700">Expiry (MM/YY)</label>
+                  <input
+                    type="text"
+                    required
+                    value={cardExpiry}
+                    onChange={(e) => setCardExpiry(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 font-mono focus:bg-white focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-slate-700">CVC / CVV</label>
+                  <input
+                    type="text"
+                    required
+                    value={cardCvc}
+                    onChange={(e) => setCardCvc(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 font-mono focus:bg-white focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={paymentProcessing}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {paymentProcessing ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Authorizing Payment...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Complete Payment ({coursePriceFormatted})</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <p className="text-[10px] text-center text-slate-400 flex items-center justify-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-emerald-500" />
+                <span>256-Bit TLS Simulated SSL Checkout. Instant Unlock.</span>
+              </p>
+            </form>
 
           </div>
         </div>
