@@ -13,11 +13,23 @@ import { ImportCurriculum } from './components/ImportCurriculum';
 import { MediaLibrary } from './components/MediaLibrary';
 import { PublishingManager } from './components/PublishingManager';
 import { StudentPortal } from './components/StudentPortal';
+import { AcademyLandingPage } from './components/AcademyLandingPage';
 import { FolderKanban, Settings, ShieldCheck, Database, Globe, KeyRound, ArrowLeft, CheckCircle2, HelpCircle } from 'lucide-react';
 
 export default function App() {
-  const isStudentView = window.location.pathname.startsWith('/course/');
-  const studentCourseSlug = isStudentView ? window.location.pathname.substring('/course/'.length) : '';
+  const pathname = window.location.pathname;
+
+  const isAcademyView = pathname.startsWith('/academy');
+  const academySlug = isAcademyView && pathname.startsWith('/academy/course/') 
+    ? pathname.substring('/academy/course/'.length) 
+    : '';
+
+  if (isAcademyView) {
+    return <AcademyLandingPage initialCourseSlug={academySlug} />;
+  }
+
+  const isStudentView = pathname.startsWith('/course/');
+  const studentCourseSlug = isStudentView ? pathname.substring('/course/'.length) : '';
 
   if (isStudentView) {
     return <StudentPortal courseSlug={studentCourseSlug} />;

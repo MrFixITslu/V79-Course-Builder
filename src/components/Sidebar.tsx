@@ -92,21 +92,18 @@ export function Sidebar({ currentView, setCurrentView, selectedAppCategory, setS
             </>
           )}
 
-          {!canEdit && (
-            <div className="pt-2 px-3">
-              <a
-                href="/course/fire-finance-pro"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full flex items-center justify-center space-x-2 px-3 py-2.5 rounded-lg text-xs font-bold bg-gradient-to-tr from-indigo-600 to-violet-500 text-white hover:opacity-90 shadow-xs transition-opacity text-center"
-              >
-                <span>Launch Student Portal ↗</span>
-              </a>
-              <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
-                As a student, you access courses via their public URLs (e.g., <code className="text-indigo-400">/course/ffpro</code>).
-              </p>
-            </div>
-          )}
+          <div className="pt-2 px-3">
+            <a
+              href="/academy"
+              className="w-full flex items-center justify-center space-x-2 px-3 py-2.5 rounded-lg text-xs font-bold bg-gradient-to-tr from-indigo-600 to-violet-500 text-white hover:opacity-90 shadow-xs transition-opacity text-center"
+            >
+              <GraduationCap className="w-4 h-4" />
+              <span>Launch Student Portal ↗</span>
+            </a>
+            <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
+              Visit the public V79 Academy landing page & catalog (<code className="text-indigo-400">/academy</code>).
+            </p>
+          </div>
         </div>
 
         {/* Application Filters */}
