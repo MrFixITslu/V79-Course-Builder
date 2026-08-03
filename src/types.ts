@@ -2,7 +2,7 @@ export type AppCategory = 'Fire Finance Pro (FFPRO2)' | 'SIWM' | 'Tiquet' | 'Kas
 
 export type DifficultyLevel = 'Beginner' | 'Intermediate' | 'Advanced';
 
-export type CourseStatus = 'Draft' | 'Review' | 'Ready for Upload' | 'Uploaded';
+export type CourseStatus = 'Draft' | 'Review' | 'Ready for Upload' | 'Uploaded' | 'Imported' | 'Published' | 'Archived';
 
 export type PricingType = 'free' | 'free_trial' | 'premium';
 

@@ -23,11 +23,12 @@ export function Dashboard({
   onNewCourse,
   setCurrentView
 }: DashboardProps) {
-  const totalCourses = courses.length;
-  const draftCourses = courses.filter((c) => c.status === 'Draft').length;
-  const reviewCourses = courses.filter((c) => c.status === 'Review').length;
-  const readyCourses = courses.filter((c) => c.status === 'Ready for Upload').length;
-  const uploadedCourses = courses.filter((c) => c.status === 'Uploaded').length;
+  const safeCourses = Array.isArray(courses) ? courses : [];
+  const totalCourses = safeCourses.length;
+  const draftCourses = safeCourses.filter((c) => c && c.status === 'Draft').length;
+  const reviewCourses = safeCourses.filter((c) => c && c.status === 'Review').length;
+  const readyCourses = safeCourses.filter((c) => c && c.status === 'Ready for Upload').length;
+  const uploadedCourses = safeCourses.filter((c) => c && c.status === 'Uploaded').length;
 
   const getStatusBadge = (status: string) => {
     switch (status) {
