@@ -49,7 +49,7 @@ MISSIONS = [
     ("Troubleshooting", "Strong technicians test from evidence instead of guessing.", "Diagnose link, DHCP, gateway, DNS and firewall failures."),
     ("Network Design", "Requirements become diagrams, capacity plans, equipment and risk decisions.", "Turn a customer brief into a physical and logical design."),
     ("Build Configure and Test", "Implementation works best in stages with tests and rollback plans.", "Build or simulate the network and prove each requirement passes."),
-    ("Network Engineer Demo Day", "Engineers explain their design, evidence, risks and tradeoffs.", "Demonstrate the final network and defend your technical choices."),
+    ("NOC Challenge & Network Engineer Demo Day", "Network engineers troubleshoot from evidence, communicate during incidents, and defend design decisions with test results.", "Solve the final NOC incident, then demonstrate the network and defend your technical choices."),
 ]
 
 PALETTES = [
