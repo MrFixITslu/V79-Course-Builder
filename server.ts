@@ -26,6 +26,7 @@ import {
 import { learner, learnerRouter, learnerAdminRouter } from './src/lib/learnerAccounts';
 import { juniorLearnerRouter, juniorAdminRouter } from './src/lib/juniorAcademyTeams';
 import { canReadCourse, courseSummary, lessonSummary, deleteCourseRecords } from './src/lib/academyAccess';
+import platformRouter from './src/lib/platformRoutes';
 const app = express();
 app.disable('x-powered-by');
 if (process.env.TRUST_PROXY === '1') app.set('trust proxy', 1);
@@ -56,6 +57,8 @@ app.use(express.json({ limit: "2mb" }));
 app.get("/healthz", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
+
+app.use("/api/platform", platformRouter);
 
 app.use("/api/learner/junior", juniorLearnerRouter);
 app.use("/api/learner", learnerRouter);
