@@ -7,6 +7,7 @@ import { QuizBuilder } from './QuizBuilder';
 import { VersionHistory } from './VersionHistory';
 
 interface CourseEditorProps {
+  key?: React.Key;
   course: Course;
   onBack: () => void;
   onUpdateCourse: (updated: Course) => void;
@@ -26,6 +27,10 @@ export function CourseEditor({ course, onBack, onUpdateCourse, onExportCourse }:
     setPublishState('publishing');
     setPublishError(null);
     try {
+      if (JSON.stringify(formData) !== lastSavedJsonRef.current) {
+        const saved = await triggerSync();
+        if (!saved) throw new Error("Save your changes successfully before publishing.");
+      }
       const res = await fetch(`/api/courses/${course.id}/publish`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) {
@@ -70,12 +75,15 @@ export function CourseEditor({ course, onBack, onUpdateCourse, onExportCourse }:
         lastSavedJsonRef.current = JSON.stringify(formData);
         setSyncStatus('synced');
         setLastSavedTime(new Date().toLocaleTimeString());
+        return true;
       } else {
         setSyncStatus('error');
+        return false;
       }
     } catch (e) {
       console.error('Auto-save sync error:', e);
       setSyncStatus('error');
+      return false;
     }
   };
 
@@ -112,7 +120,7 @@ export function CourseEditor({ course, onBack, onUpdateCourse, onExportCourse }:
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex items-center space-x-4">
           <button
-            onClick={onBack}
+            onClick={async () => { if (JSON.stringify(formData) === lastSavedJsonRef.current || await triggerSync()) onBack(); }}
             className="p-2.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -381,8 +389,9 @@ export function CourseEditor({ course, onBack, onUpdateCourse, onExportCourse }:
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2.5 text-sm text-slate-800"
                   >
                     <option value="free">Free</option>
-                    <option value="free_trial">Free Trial</option>
-                    <option value="premium">Premium (paid)</option>
+                    {formData.pricingType === "free_trial" && <option value="free_trial">Legacy trial (membership required)</option>}
+                    <option value="subscription">Subscription access</option>
+                      {formData.pricingType === "premium" && <option value="premium">Legacy premium (membership required)</option>}
                   </select>
                 </div>
 

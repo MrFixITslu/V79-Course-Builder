@@ -47,6 +47,7 @@ import {
 
 interface BusinessAdvantageProgrammeProps {
   courseId: string;
+  storageScope?: string;
   programme: CourseProgramme;
   modules: Module[];
   lessonsMap: Record<string, Lesson[]>;
@@ -191,6 +192,7 @@ function ScoreSummary({
 
 export function BusinessAdvantageProgramme({
   courseId,
+  storageScope = "guest",
   programme,
   modules,
   lessonsMap,
@@ -200,7 +202,7 @@ export function BusinessAdvantageProgramme({
   onOpenModule,
   onStatusChange
 }: BusinessAdvantageProgrammeProps) {
-  const [state, setState] = useState<BusinessAdvantageState>(() => storageState(courseId, programme.version));
+  const [state, setState] = useState<BusinessAdvantageState>(() => storageState(`${storageScope}_${courseId}`, programme.version));
   const [activeTab, setActiveTab] = useState<ProgrammeTab>(() => state.startingAssessment.completedAt ? 'overview' : 'diagnostic');
   const [diagnosticMode, setDiagnosticMode] = useState<DiagnosticMode>(() => state.startingAssessment.completedAt ? 'final' : 'starting');
   const [diagnosticCategoryIndex, setDiagnosticCategoryIndex] = useState(0);
@@ -208,9 +210,10 @@ export function BusinessAdvantageProgramme({
   const [profileSaved, setProfileSaved] = useState(Boolean(state.startingAssessment.completedAt));
   const [notice, setNotice] = useState<string | null>(null);
 
-  const storageKey = `v79_programme_state_${courseId}`;
+  const storageKey = `v79_programme_state_${storageScope}_${courseId}`;
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(state));
+    window.dispatchEvent(new CustomEvent("academy-programme-saved"));
   }, [state, storageKey]);
 
   const startingResult = useMemo(
@@ -243,10 +246,6 @@ export function BusinessAdvantageProgramme({
   );
 
   useEffect(() => {
-    if (status.readyForCertificate && !state.certificateId) {
-      setState((current) => ({ ...current, certificateId: createCertificateId() }));
-      return;
-    }
     onStatusChange(status);
   }, [status, state.certificateId, onStatusChange]);
 
@@ -362,14 +361,22 @@ export function BusinessAdvantageProgramme({
     setNotice('Your Business Advantage Plan was downloaded as an editable Markdown document.');
   };
 
-  const submitFinalExam = () => {
+  const submitFinalExam = async () => {
     if (programme.finalExam.questions.some((question) => !state.examAnswers[question.id])) {
       setNotice(`Answer all ${programme.finalExam.questions.length} questions before submitting.`);
       return;
     }
-    const attempt = scoreFinalExam(programme, state.examAnswers);
+    let attempt;
+    let certificateId;
+    try {
+      const response = await fetch(`/api/learner/exam/${courseId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: state.examAnswers }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      attempt = result.attempt; certificateId = result.certificateId;
+    } catch (e: any) { setNotice(e.message); return; }
     setState((current) => ({
       ...current,
+      certificateId,
       examAttempts: [...current.examAttempts, attempt],
       examAnswers: {}
     }));

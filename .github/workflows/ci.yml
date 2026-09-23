@@ -42,6 +42,9 @@ jobs:
       - name: Production build
         run: npm run build
 
+      - name: Academy API integration tests
+        run: npm run test:api
+
   docker:
     name: Docker image build
     runs-on: ubuntu-latest

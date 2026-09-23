@@ -28,7 +28,7 @@ export function Dashboard({
   const draftCourses = safeCourses.filter((c) => c && c.status === 'Draft').length;
   const reviewCourses = safeCourses.filter((c) => c && c.status === 'Review').length;
   const readyCourses = safeCourses.filter((c) => c && c.status === 'Ready for Upload').length;
-  const uploadedCourses = safeCourses.filter((c) => c && c.status === 'Uploaded').length;
+  const uploadedCourses = safeCourses.filter((c) => c && ['Uploaded', 'Published'].includes(c.status)).length;
 
   const getStatusBadge = (status: string) => {
     switch (status) {

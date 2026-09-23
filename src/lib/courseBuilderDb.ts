@@ -47,7 +47,7 @@ export function initAndMigrateDb(): StoreSchema {
       const raw = fs.readFileSync(DATA_FILE, 'utf-8');
       db = JSON.parse(raw);
     } catch (e) {
-      console.error('[Migrations] Failed to read store.json, creating a new one', e);
+      throw new Error('Cannot read store.json. Restore a valid backup before starting; existing data has been preserved.');
     }
   }
 
@@ -110,23 +110,14 @@ export function initAndMigrateDb(): StoreSchema {
 }
 
 export function saveDb(data: StoreSchema) {
-  try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
-  } catch (e) {
-    console.error('[Database] Failed to save DB to file:', e);
-  }
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  const temporary = DATA_FILE + '.tmp';
+  fs.writeFileSync(temporary, JSON.stringify(data, null, 2), { mode: 0o600 });
+  fs.renameSync(temporary, DATA_FILE);
 }
-
-// Load DB helper
 export function loadDb(): StoreSchema {
-  try {
-    if (fs.existsSync(DATA_FILE)) {
-      return JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8')) as StoreSchema;
-    }
-  } catch (e) {
-    console.error('[Database] Failed to read DB file:', e);
-  }
-  return initAndMigrateDb();
+  if (!fs.existsSync(DATA_FILE)) return initAndMigrateDb();
+  return JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8')) as StoreSchema;
 }
 
 // ---------------------------------------------------------------------------

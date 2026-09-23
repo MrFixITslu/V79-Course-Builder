@@ -27,6 +27,9 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3030
+      - ACADEMY_PUBLIC_URL=${ACADEMY_PUBLIC_URL:-}
+      - TRUST_PROXY=${TRUST_PROXY:-0}
+      - ADMIN_RESET_TOKEN=${ADMIN_RESET_TOKEN:-}
       - DATABASE_URL=postgresql://v79_admin:v79_secure_password@postgres:5432/v79_academy_builder
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       # Required to publish courses to the website (website2026 / VISION79
@@ -38,7 +41,7 @@ services:
       - WEBSITE_ADMIN_PASSWORD=${WEBSITE_ADMIN_PASSWORD}
       # OPTIONAL: seeds the very first one-time admin password on first boot
       # only (see server.ts comments). If unset, one is generated randomly
-      # and printed once to `docker logs v79_course_builder`.
+      # and saved privately in data/.initial_admin_password.txt.
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
     volumes:
       # Without this, course data AND the admin login credential are stored
