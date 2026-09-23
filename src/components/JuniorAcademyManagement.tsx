@@ -37,7 +37,8 @@ export function JuniorAcademyManagement() {
       const r = await fetch(`/api/junior-admin/${JUNIOR_COURSE_ID}/auto-form`, { method:'POST' });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error);
-      setMessage(`Created ${data.created} new studio team(s). Learners already assigned were left unchanged.`);
+      const leftover = Array.isArray(data.unassigned) ? data.unassigned.map((u:any)=>u.name).join(', ') : '';
+      setMessage(`Created ${data.created} new studio team(s) of exactly three.${leftover ? ' Still unassigned because a full team of three cannot be formed yet: ' + leftover : ''}`);
       await refresh();
     } catch(e:any) { setMessage(e.message); } finally { setBusy(false); }
   }
@@ -84,6 +85,9 @@ export function JuniorAcademyManagement() {
   }
 
   const pending = useMemo(() => teams.flatMap(t => (t.submissions || []).filter((s:any)=>['Submitted','Under Review','Needs Changes'].includes(s.status))), [teams]);
+  const enrolled = useMemo(() => learners.filter((l:any)=>(l.enrolledCourseIds || []).includes(JUNIOR_COURSE_ID)), [learners]);
+  const assignedIds = useMemo(() => new Set(teams.flatMap((t:any)=>t.memberIds || [])), [teams]);
+  const unassigned = useMemo(() => enrolled.filter((l:any)=>!assignedIds.has(l.id)), [enrolled, assignedIds]);
 
   return <section className="max-w-7xl mx-auto p-5 sm:p-8 space-y-6">
     <div className="flex flex-wrap items-start justify-between gap-4">
@@ -92,11 +96,12 @@ export function JuniorAcademyManagement() {
     </div>
 
     {message && <p role="status" className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-900">{message}</p>}
+    {unassigned.length > 0 && <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-900"><b>Waiting for a full team of 3:</b> {unassigned.map((l:any)=>l.name).join(', ')}. Keep these learners unassigned until three are available, or adjust enrollment manually.</div>}
 
     <div className="grid sm:grid-cols-3 gap-4">
       <div className="p-5 bg-white border rounded-xl"><p className="text-sm text-slate-500">Studio teams</p><p className="text-3xl font-bold mt-2">{teams.length}</p></div>
       <div className="p-5 bg-white border rounded-xl"><p className="text-sm text-slate-500">Pending reviews</p><p className="text-3xl font-bold mt-2">{pending.length}</p></div>
-      <div className="p-5 bg-white border rounded-xl"><p className="text-sm text-slate-500">Registered learners</p><p className="text-3xl font-bold mt-2">{learners.length}</p></div>
+      <div className="p-5 bg-white border rounded-xl"><p className="text-sm text-slate-500">Enrolled / unassigned</p><p className="text-3xl font-bold mt-2">{enrolled.length} <span className="text-lg text-amber-600">/ {unassigned.length}</span></p></div>
     </div>
 
     <div className="space-y-5">
@@ -116,9 +121,23 @@ export function JuniorAcademyManagement() {
         <div>
           <h3 className="font-bold text-sm mb-2">Weekly submissions</h3>
           <div className="space-y-2">{(team.submissions || []).length===0 && <p className="text-xs text-slate-500">No Studio Check-Ins submitted yet.</p>}
-            {(team.submissions || []).map((s:any)=><div key={s.id} className="rounded-xl border p-4 flex flex-wrap gap-3 justify-between items-center">
-              <div><p className="font-bold text-sm">Mission {s.missionNumber} <span className="text-xs font-normal text-slate-500">• revision {s.revision}</span></p><p className="text-xs text-slate-500">{s.status} • {s.artifactText?.slice(0,120) || 'No description'}{s.artifactText?.length>120?'…':''}</p></div>
-              <div className="flex gap-2">{s.status!=='Approved' && <button disabled={busy} onClick={()=>review(s,'Needs Changes')} className="px-3 py-2 rounded-lg border text-xs font-semibold text-amber-700">Needs changes</button>}<button disabled={busy} onClick={()=>review(s,'Approved')} className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold"><CheckCircle2 size={14} className="inline mr-1"/>Approve</button></div>
+            {(team.submissions || []).map((s:any)=><div key={s.id} className="rounded-xl border p-4 space-y-3">
+              <div className="flex flex-wrap gap-3 justify-between items-center">
+                <div><p className="font-bold text-sm">Mission {s.missionNumber} <span className="text-xs font-normal text-slate-500">• revision {s.revision}</span></p><p className="text-xs text-slate-500">{s.status} • {s.artifactText?.slice(0,120) || 'No description'}{s.artifactText?.length>120?'…':''}</p></div>
+                <div className="flex gap-2">{s.status!=='Approved' && <button disabled={busy} onClick={()=>review(s,'Needs Changes')} className="px-3 py-2 rounded-lg border text-xs font-semibold text-amber-700">Needs changes</button>}<button disabled={busy} onClick={()=>review(s,'Approved')} className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold"><CheckCircle2 size={14} className="inline mr-1"/>Approve</button></div>
+              </div>
+              <details className="rounded-lg bg-slate-50 p-3">
+                <summary className="cursor-pointer text-xs font-bold">Individual accountability reflections</summary>
+                <div className="mt-2 grid gap-2 md:grid-cols-3">
+                  {team.members.map((m:any)=>{
+                    const reflection=s.individualReflections?.[m.id];
+                    return <div key={m.id} className="rounded-lg bg-white border p-2 text-[11px]">
+                      <p className="font-bold">{m.name}</p>
+                      {reflection ? <><p className="mt-1"><b>Helped:</b> {reflection.helped || '—'}</p><p><b>Learned:</b> {reflection.learned || '—'}</p><p><b>Next:</b> {reflection.next || '—'}</p></> : <p className="mt-1 text-amber-700">Reflection not saved yet.</p>}
+                    </div>;
+                  })}
+                </div>
+              </details>
             </div>)}
           </div>
         </div>
