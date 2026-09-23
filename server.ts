@@ -58,6 +58,8 @@ app.get("/healthz", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
+app.use("/api/platform", platformRouter);
+
 app.use("/api/learner/junior", juniorLearnerRouter);
 app.use("/api/learner", learnerRouter);
 
