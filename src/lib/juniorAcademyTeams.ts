@@ -383,7 +383,9 @@ juniorAdminRouter.get('/:courseId/teams', (req, res) => {
 });
 
 juniorAdminRouter.post('/:courseId/teams', (req, res) => {
-  const memberIds = Array.isArray(req.body.memberIds) ? [...new Set(req.body.memberIds.map(String))].slice(0, 3) : [];
+  const memberIds: string[] = Array.isArray(req.body.memberIds)
+    ? Array.from(new Set<string>(req.body.memberIds.map((id: any) => String(id)))).slice(0, 3)
+    : [];
   if (!memberIds.length || memberIds.length > 3) return res.status(400).json({ error: 'Select one to three learners.' });
   const learners = readLearners();
   if (memberIds.some(id => !learners.some(l => l.id === id))) return res.status(400).json({ error: 'One or more learner IDs are invalid.' });
@@ -393,7 +395,8 @@ juniorAdminRouter.post('/:courseId/teams', (req, res) => {
     return res.status(409).json({ error: 'One or more learners are already assigned to a team for this course.' });
   }
 
-  const leaderId = memberIds.includes(req.body.leaderId) ? req.body.leaderId : memberIds[0];
+  const requestedLeaderId = String(req.body.leaderId || '');
+  const leaderId = memberIds.includes(requestedLeaderId) ? requestedLeaderId : memberIds[0];
   const roles: JuniorTeam['roles'] = {};
   memberIds.forEach((id, index) => roles[id] = id === leaderId ? 'Leader' : index === 1 ? 'Builder' : 'Checker');
 
