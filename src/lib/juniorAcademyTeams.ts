@@ -386,7 +386,7 @@ juniorAdminRouter.post('/:courseId/teams', (req, res) => {
   const memberIds: string[] = Array.isArray(req.body.memberIds)
     ? Array.from(new Set<string>(req.body.memberIds.map((id: any) => String(id)))).slice(0, 3)
     : [];
-  if (!memberIds.length || memberIds.length > 3) return res.status(400).json({ error: 'Select one to three learners.' });
+  if (memberIds.length !== 3) return res.status(400).json({ error: 'Junior Academy studio teams must have exactly three learners.' });
   const learners = readLearners();
   if (memberIds.some(id => !learners.some(l => l.id === id))) return res.status(400).json({ error: 'One or more learner IDs are invalid.' });
 
@@ -431,9 +431,9 @@ juniorAdminRouter.post('/:courseId/auto-form', (req, res) => {
   const created: JuniorTeam[] = [];
   const now = new Date().toISOString();
 
-  for (let i = 0; i < remaining.length; i += 3) {
+  const fullTeamCount = Math.floor(remaining.length / 3);
+  for (let i = 0; i < fullTeamCount * 3; i += 3) {
     const group = remaining.slice(i, i + 3);
-    if (!group.length) continue;
     const roles: JuniorTeam['roles'] = {};
     group.forEach((l, idx) => roles[l.id] = idx === 0 ? 'Leader' : idx === 1 ? 'Builder' : 'Checker');
     const team: JuniorTeam = {
@@ -457,7 +457,8 @@ juniorAdminRouter.post('/:courseId/auto-form', (req, res) => {
   }
   store.teams.push(...created);
   writeStore(store);
-  res.json({ created: created.length, teams: created.map(t => decorateTeam(t, learners, store)) });
+  const unassigned = remaining.slice(fullTeamCount * 3).map(safeLearner).filter(Boolean);
+  res.json({ created: created.length, teams: created.map(t => decorateTeam(t, learners, store)), unassigned });
 });
 
 juniorAdminRouter.put('/teams/:teamId/leader', (req, res) => {
