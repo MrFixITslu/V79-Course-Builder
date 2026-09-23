@@ -23,10 +23,33 @@ import {
   PublishingLogRepository
 } from "./src/lib/courseBuilderDb";
 
+import { learner, learnerRouter, learnerAdminRouter } from './src/lib/learnerAccounts';
+import { canReadCourse, courseSummary, lessonSummary, deleteCourseRecords } from './src/lib/academyAccess';
 const app = express();
+app.disable('x-powered-by');
+if (process.env.TRUST_PROXY === '1') app.set('trust proxy', 1);
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  if (req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.headers.origin) {
+    try { if (new URL(req.headers.origin).host !== req.get('host')) return res.status(403).json({ error: 'Cross-origin request rejected.' }); } catch { return res.sendStatus(403); }
+  }
+  next();
+});
+const attempts = new Map<string, { count: number; expires: number }>();
+app.use(['/api/admin/login', '/api/admin/reset-password', '/api/learner/login', '/api/learner/register'], (req, res, next) => {
+  if (req.method !== 'POST') return next();
+  const key = req.ip || 'unknown'; let entry = attempts.get(key);
+  if (!entry || entry.expires < Date.now()) { entry = { count: 0, expires: Date.now() + 15 * 60000 }; attempts.set(key, entry); }
+  if (++entry.count > 30) { res.setHeader('Retry-After', '900'); return res.status(429).json({ error: 'Too many attempts. Try again in 15 minutes.' }); }
+  next();
+});
+setInterval(() => { for (const [key, entry] of attempts) if (entry.expires < Date.now()) attempts.delete(key); }, 60000).unref();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: "2mb" }));
+app.use("/api/learner", learnerRouter);
 
 // Data storage file path
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -89,13 +112,14 @@ function loadOrCreateAdminAuth(): AdminAuthRecord {
     console.error("[Authentication] Failed to read persisted admin credential, regenerating:", e);
   }
 
-  const initialPassword = cleanEnvValue(process.env.ADMIN_PASSWORD) || "V79Academy2026!";
+  const initialPassword = cleanEnvValue(process.env.ADMIN_PASSWORD) || crypto.randomBytes(24).toString("base64url");
   const { salt, hash } = hashAdminPassword(initialPassword);
   const record: AdminAuthRecord = { salt, hash, mustChangePassword: true, updatedAt: new Date().toISOString() };
   saveAdminAuth(record);
   console.warn("=".repeat(70));
   console.warn("[Authentication] Admin credential (re)initialized.");
-  console.warn(`[Authentication] Initial admin password: ${initialPassword}`);
+  if (!cleanEnvValue(process.env.ADMIN_PASSWORD)) fs.writeFileSync(path.join(DATA_DIR, ".initial_admin_password.txt"), initialPassword, { mode: 0o600 });
+  console.warn("[Authentication] Use ADMIN_PASSWORD or data/.initial_admin_password.txt for initial sign-in.");
   console.warn("[Authentication] This password MUST be changed immediately after login - the next");
   console.warn("[Authentication] successful login will be required to set a new permanent password");
   console.warn("[Authentication] before any other action in this app is permitted.");
@@ -112,13 +136,13 @@ function loadOrCreateResetToken(): string {
   try {
     if (fs.existsSync(ADMIN_RESET_TOKEN_PATH)) {
       const existing = fs.readFileSync(ADMIN_RESET_TOKEN_PATH, "utf-8").trim();
-      if (existing) return existing;
+      if (existing && existing !== "V79-RECOVERY-KEY-2026") return existing;
     }
   } catch (e) {
     console.error("[Authentication] Failed to read reset token file:", e);
   }
 
-  const token = cleanEnvValue(process.env.ADMIN_RESET_TOKEN) || "V79-RECOVERY-KEY-2026";
+  const token = (cleanEnvValue(process.env.ADMIN_RESET_TOKEN) !== "V79-RECOVERY-KEY-2026" ? cleanEnvValue(process.env.ADMIN_RESET_TOKEN) : "") || crypto.randomBytes(32).toString("hex");
   try {
     fs.writeFileSync(ADMIN_RESET_TOKEN_PATH, token, { mode: 0o600 });
   } catch (e) {
@@ -128,7 +152,7 @@ function loadOrCreateResetToken(): string {
 }
 
 let adminResetToken: string = loadOrCreateResetToken();
-console.warn(`[Authentication] Master Recovery Reset Token: ${adminResetToken}`);
+console.warn("[Authentication] Recovery key is stored in data/.admin_reset_token.txt.");
 
 const SESSION_COOKIE_NAME = "cb_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
@@ -176,7 +200,7 @@ function parseCookies(req: express.Request): Record<string, string> {
     if (idx === -1) continue;
     const key = part.slice(0, idx).trim();
     const val = part.slice(idx + 1).trim();
-    if (key) out[key] = decodeURIComponent(val);
+    if (key) { try { out[key] = decodeURIComponent(val); } catch { /* ignore malformed cookies */ } }
   }
   return out;
 }
@@ -185,12 +209,12 @@ function setSessionCookie(res: express.Response, token: string) {
   const maxAgeSec = Math.floor(SESSION_TTL_MS / 1000);
   res.setHeader(
     "Set-Cookie",
-    `${SESSION_COOKIE_NAME}=${token}; HttpOnly; Path=/; Max-Age=${maxAgeSec}; SameSite=None; Secure`
+    `${SESSION_COOKIE_NAME}=${token}; HttpOnly; Path=/; Max-Age=${maxAgeSec}; SameSite=Lax${process.env.NODE_ENV === "production" ? "; Secure" : ""}`
   );
 }
 
 function clearSessionCookie(res: express.Response) {
-  res.setHeader("Set-Cookie", `${SESSION_COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0; SameSite=None; Secure`);
+  res.setHeader("Set-Cookie", `${SESSION_COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax${process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
 }
 
 app.post("/api/admin/login", (req, res) => {
@@ -252,7 +276,7 @@ app.post("/api/admin/change-password", (req, res) => {
 app.get("/api/admin/recovery-info", (req, res) => {
   res.json({
     hasResetToken: true,
-    defaultTokenHint: adminResetToken === "V79-RECOVERY-KEY-2026" ? "V79-RECOVERY-KEY-2026" : "Custom token configured"
+    recoveryInstructions: "Ask the server administrator for the recovery key."
   });
 });
 
@@ -294,13 +318,14 @@ app.post("/api/admin/reset-password", (req, res) => {
 // ---------------------------------------------------------------------------
 // Public student endpoints (Exempt from Admin authentication checks)
 // ---------------------------------------------------------------------------
+function isActiveAdmin(req: express.Request) { const session = getSession(parseCookies(req)[SESSION_COOKIE_NAME]); return Boolean(session && !session.mustChangePassword); }
 app.get("/api/public/courses", (req, res) => {
   try {
     const data = loadDb();
     const publicCourses = (data.courses || []).filter(
       (c: any) => c.status === "Published" || c.status === "Uploaded"
     );
-    res.json(publicCourses);
+    res.json(publicCourses.map((c: any) => courseSummary(c, data, false)));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -332,7 +357,9 @@ app.get("/api/public/courses/by-slug/:slug", (req, res) => {
       return false;
     };
 
-    const course = (data.courses || []).find((c: any) => {
+    const published = (data.courses || []).filter((c: any) => ["Published", "Uploaded"].includes(c.status));
+    const exact = published.find((c: any) => c.id.toLowerCase() === slug || c.slug === slug || slugify(c.title) === slug);
+    const course = exact || published.find((c: any) => {
       const isPublished = c.status === "Published" || c.status === "Uploaded";
       return isPublished && matchesSlug(c, slug);
     });
@@ -340,7 +367,7 @@ app.get("/api/public/courses/by-slug/:slug", (req, res) => {
     if (!course) {
       return res.status(404).json({ error: "Published course not found for slug: " + slug });
     }
-    res.json(course);
+    res.json(courseSummary(course, data, canReadCourse(course, learner(req), Boolean(getSession(parseCookies(req)[SESSION_COOKIE_NAME]) && !getSession(parseCookies(req)[SESSION_COOKIE_NAME])?.mustChangePassword))));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -372,7 +399,7 @@ app.get("/api/public/modules/:moduleId/lessons", (req, res) => {
     }
     const lessons = (data.lessons || []).filter((l: any) => l.moduleId === req.params.moduleId);
     lessons.sort((a: any, b: any) => (a.orderNumber || 0) - (b.orderNumber || 0));
-    res.json(lessons);
+    res.json(canReadCourse(course, learner(req), isActiveAdmin(req)) ? lessons : lessons.map(lessonSummary));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -387,6 +414,7 @@ app.get("/api/public/lessons/:lessonId/content-blocks", (req, res) => {
     if (!course || (course.status !== "Published" && course.status !== "Uploaded")) {
       return res.status(404).json({ error: "Course not found or not published" });
     }
+    if (!canReadCourse(course, learner(req), isActiveAdmin(req))) return res.status(403).json({ error: "An active subscription is required.", code: "SUBSCRIPTION_REQUIRED" });
     const blocks = (data.contentBlocks || []).filter((cb: any) => cb.lessonId === req.params.lessonId);
     blocks.sort((a: any, b: any) => (a.orderNumber || 0) - (b.orderNumber || 0));
     res.json(blocks);
@@ -404,8 +432,9 @@ app.get("/api/public/lessons/:lessonId/quiz", (req, res) => {
     if (!course || (course.status !== "Published" && course.status !== "Uploaded")) {
       return res.status(404).json({ error: "Course not found or not published" });
     }
+    if (!canReadCourse(course, learner(req), isActiveAdmin(req))) return res.status(403).json({ error: "An active subscription is required.", code: "SUBSCRIPTION_REQUIRED" });
     const quiz = (data.quizzes || []).find((q: any) => q.lessonId === req.params.lessonId);
-    res.json(quiz || null);
+    res.json(quiz ? { ...quiz, questions: quiz.questions.map((q: any) => ({ ...q, correctAnswer: undefined, explanation: undefined })) } : null);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -418,6 +447,7 @@ app.get("/api/public/courses/:courseId/assignments", (req, res) => {
     if (!course || (course.status !== "Published" && course.status !== "Uploaded")) {
       return res.status(404).json({ error: "Course not found or not published" });
     }
+    if (!canReadCourse(course, learner(req), isActiveAdmin(req))) return res.status(403).json({ error: "An active subscription is required.", code: "SUBSCRIPTION_REQUIRED" });
     const assignments = (data.assignments || []).filter((a: any) => a.courseId === req.params.courseId);
     res.json(assignments);
   } catch (err: any) {
@@ -432,11 +462,25 @@ app.get("/api/public/courses/:courseId/downloads", (req, res) => {
     if (!course || (course.status !== "Published" && course.status !== "Uploaded")) {
       return res.status(404).json({ error: "Course not found or not published" });
     }
+    if (!canReadCourse(course, learner(req), isActiveAdmin(req))) return res.status(403).json({ error: "An active subscription is required.", code: "SUBSCRIPTION_REQUIRED" });
     const downloads = (data.downloads || []).filter((d: any) => d.courseId === req.params.courseId);
     res.json(downloads);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
+});
+
+app.post('/api/public/lessons/:lessonId/quiz/submit', (req, res) => {
+  const data = loadDb(); const lesson = data.lessons.find(l => l.id === req.params.lessonId);
+  const course = data.courses.find(c => c.id === lesson?.courseId && ['Published', 'Uploaded'].includes(c.status));
+  if (!course) return res.status(404).json({ error: 'Course not found.' });
+  if (!canReadCourse(course, learner(req), isActiveAdmin(req))) return res.status(403).json({ error: 'Subscription required.' });
+  const quiz = data.quizzes.find(q => q.lessonId === lesson.id);
+  if (!quiz?.questions?.length) return res.status(404).json({ error: 'Quiz not found.' });
+  const answers = req.body.answers || {};
+  if (quiz.questions.some((q: any) => !q.options.includes(answers[q.id]))) return res.status(400).json({ error: 'Answer every question before submitting.' });
+  const correct = quiz.questions.filter((q: any) => answers[q.id] === (typeof q.correctAnswer === 'number' ? q.options[q.correctAnswer] : q.correctAnswer)).length;
+  res.json({ score: Math.round(correct / quiz.questions.length * 100), correct, total: quiz.questions.length });
 });
 
 // Everything under /api except the unauthenticated auth routes above requires a valid,
@@ -451,6 +495,8 @@ app.use("/api", (req, res, next) => {
   }
   next();
 });
+
+app.use("/api/learners", learnerAdminRouter);
 
 const initialData = {
   courses: [
@@ -685,10 +731,18 @@ let db = initAndMigrateDb() as any;
 // API Endpoints - Courses
 app.get("/api/courses", (req, res) => {
   db = loadData();
-  res.json(db.courses);
+  res.json(db.courses.map((c: any) => ({ ...c, moduleCount: db.modules.filter((m: any) => m.courseId === c.id).length, lessonCount: db.lessons.filter((l: any) => l.courseId === c.id).length })));
 });
 
+function validateCourseInput(body: any): string | null {
+  if (body.title !== undefined && (typeof body.title !== 'string' || !body.title.trim())) return 'A course title is required.';
+  if (body.pricingType !== undefined && !['free', 'subscription', 'premium', 'free_trial'].includes(body.pricingType)) return 'Choose free or subscription access.';
+  if (body.price !== undefined && (typeof body.price !== 'number' || !Number.isFinite(body.price) || body.price < 0)) return 'Price must be a non-negative number.';
+  if (body.status !== undefined && !['Draft', 'Review', 'Ready for Upload', 'Uploaded', 'Imported', 'Published', 'Archived'].includes(body.status)) return 'Invalid course status.';
+  return null;
+}
 app.post("/api/courses", (req, res) => {
+  const invalid = validateCourseInput(req.body); if (invalid) return res.status(400).json({ error: invalid });
   db = loadData();
   const newCourse = {
     id: `course-${Date.now()}`,
@@ -702,7 +756,7 @@ app.post("/api/courses", (req, res) => {
     thumbnail: req.body.thumbnail || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=800&q=80",
     estimatedDuration: req.body.estimatedDuration || "2.0 hours",
     prerequisites: req.body.prerequisites || [],
-    learning_objectives: req.body.learning_objectives || [],
+    learningObjectives: req.body.learningObjectives || req.body.learning_objectives || [],
     status: req.body.status || "Draft",
     pricingType: req.body.pricingType || "free",
     price: typeof req.body.price === "number" ? req.body.price : 0,
@@ -721,8 +775,9 @@ app.get("/api/courses/:id", (req, res) => {
   res.json(course);
 });
 
-app.put("/api/courses/:id", (req, res) => {
-  db = loadData();
+app.put("/api/courses/:id", async (req, res) => {
+  const invalid = validateCourseInput(req.body); if (invalid) return res.status(400).json({ error: invalid });
+  let db = loadData();
   const index = db.courses.findIndex((c: any) => c.id === req.params.id);
   if (index === -1) return res.status(404).json({ error: "Course not found" });
 
@@ -737,9 +792,19 @@ app.put("/api/courses/:id", (req, res) => {
     }
   }
 
+  if (originalCourse.websiteAppId && targetStatus && !['Published', 'Uploaded'].includes(targetStatus)) {
+    try {
+      const token = await getWebsiteAdminToken();
+      const remote = await fetch(`${WEBSITE_SYNC_URL}/api/apps/${originalCourse.websiteAppId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15000) });
+      if (!remote.ok && remote.status !== 404) throw new Error(`Website returned ${remote.status}`);
+      originalCourse.websiteAppId = undefined;
+    } catch (e: any) { return res.status(502).json({ error: `Unpublishing failed. Course remains available: ${e.message}` }); }
+  }
   db.courses[index] = {
     ...db.courses[index],
     ...req.body,
+    id: originalCourse.id,
+    websiteAppId: originalCourse.websiteAppId,
     updatedAt: new Date().toISOString()
   };
   saveData(db);
@@ -760,28 +825,24 @@ app.put("/api/courses/:id", (req, res) => {
   res.json(db.courses[index]);
 });
 
-app.delete("/api/courses/:id", (req, res) => {
-  db = loadData();
+app.delete("/api/courses/:id", async (req, res) => {
+  let db = loadData();
   const courseId = req.params.id;
   const course = db.courses.find((c: any) => c.id === courseId);
   const userRole = req.headers["x-user-role"] || req.query.userRole || "Admin";
 
-  if (course) {
-    PublishingLogRepository.create({
-      courseId: course.id,
-      courseTitle: course.title,
-      event: course.status === "Draft" ? "Draft Deleted" : "Course Deleted",
-      fromStatus: course.status,
-      toStatus: "None",
-      performedBy: userRole as any,
-      details: `Course "${course.title}" was permanently deleted with all child curriculum items.`
-    });
+  if (!course) return res.status(404).json({ error: "Course not found" });
+  // Remove the linked website entry first; a failed remote delete must stay retryable.
+  if (course.websiteAppId) {
+    try {
+      const token = await getWebsiteAdminToken();
+      const response = await fetch(`${WEBSITE_SYNC_URL}/api/apps/${course.websiteAppId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15000) });
+      if (!response.ok && response.status !== 404) throw new Error(`Website returned ${response.status}`);
+    } catch (error: any) { return res.status(502).json({ error: `Course retained: website removal failed. ${error.message}` }); }
   }
-
-  db.courses = db.courses.filter((c: any) => c.id !== courseId);
-  db.modules = db.modules.filter((m: any) => m.courseId !== courseId);
-  db.lessons = db.lessons.filter((l: any) => l.courseId !== courseId);
-  db.assets = db.assets.filter((a: any) => a.courseId !== courseId);
+  db = loadData();
+  deleteCourseRecords(db, courseId);
+  db.publishingLogs.push({ id: crypto.randomUUID(), courseId, courseTitle: course.title, event: 'Course Deleted', fromStatus: course.status, toStatus: 'None', performedBy: 'Admin', timestamp: new Date().toISOString(), details: 'Course and associated content removed.' });
   saveData(db);
   res.json({ success: true });
 });
@@ -822,6 +883,8 @@ app.put("/api/modules/:id", (req, res) => {
 app.delete("/api/modules/:id", (req, res) => {
   db = loadData();
   const modId = req.params.id;
+  const removedLessons = new Set(db.lessons.filter((l: any) => l.moduleId === modId).map((l: any) => l.id));
+  for (const key of ['quizzes', 'contentBlocks', 'assignments', 'downloads', 'assets', 'media']) db[key] = (db[key] || []).filter((row: any) => !removedLessons.has(row.lessonId) && row.moduleId !== modId);
   db.modules = db.modules.filter((m: any) => m.id !== modId);
   db.lessons = db.lessons.filter((l: any) => l.moduleId !== modId);
   saveData(db);
@@ -919,7 +982,7 @@ app.post("/api/modules/:moduleId/lessons", (req, res) => {
     courseId: mod.courseId,
     title: req.body.title || "New Lesson",
     description: req.body.description || "",
-    learning_objectives: req.body.learning_objectives || [],
+    learningObjectives: req.body.learningObjectives || req.body.learning_objectives || [],
     estimatedTime: req.body.estimatedTime || "20 mins",
     lessonContent: req.body.lessonContent || "# Lesson Content\n\nAdd content here...",
     videoUrl: req.body.videoUrl || "",
@@ -954,7 +1017,7 @@ app.delete("/api/lessons/:id", (req, res) => {
   db = loadData();
   const lesId = req.params.id;
   db.lessons = db.lessons.filter((l: any) => l.id !== lesId);
-  db.quizzes = db.quizzes.filter((q: any) => q.lessonId !== lesId);
+  for (const key of ["quizzes", "contentBlocks", "assignments", "downloads", "assets", "media"]) db[key] = (db[key] || []).filter((row: any) => row.lessonId !== lesId);
   saveData(db);
   res.json({ success: true });
 });
@@ -965,7 +1028,7 @@ app.post("/api/modules/:moduleId/lessons/reorder", (req, res) => {
   if (!Array.isArray(lessonIds)) return res.status(400).json({ error: "lessonIds array required" });
   db.lessons.forEach((l: any) => {
     const idx = lessonIds.indexOf(l.id);
-    if (idx !== -1) {
+    if (idx !== -1 && l.moduleId === req.params.moduleId) {
       l.moduleId = req.params.moduleId;
       l.orderNumber = idx + 1;
     }
@@ -1185,9 +1248,9 @@ function buildWebsitePayload(course: any, modules: any[], lessons: any[], quizze
         title: les.title,
         duration: les.estimatedTime || "",
         freePreview: idx === 0 && sortedModules[0]?.id === mod.id,
-        videoUrl: les.videoUrl || undefined,
-        audioUrl: les.audioUrl || undefined,
-        readingMaterial: les.lessonContent || undefined
+        videoUrl: course.pricingType === "free" ? les.videoUrl || undefined : undefined,
+        audioUrl: course.pricingType === "free" ? les.audioUrl || undefined : undefined,
+        readingMaterial: course.pricingType === "free" ? les.lessonContent || undefined : undefined
       }))
     };
   });
@@ -1208,14 +1271,14 @@ function buildWebsitePayload(course: any, modules: any[], lessons: any[], quizze
     description: course.fullDescription,
     category: "courses",
     pricingType: course.pricingType || "free",
-    price: course.pricingType === "premium" ? Number(course.price) || 0 : 0,
+    price: ["premium", "subscription"].includes(course.pricingType) ? Number(course.price) || 0 : 0,
     logoUrl: course.thumbnail || "lucide:GraduationCap",
-    accessUrl: `/course/${slugify(course.title)}`,
+    accessUrl: `${(process.env.ACADEMY_PUBLIC_URL || "").replace(/\/$/, "")}/course/${course.id}`,
     instructor: course.instructor || "",
     duration: course.estimatedDuration || "",
     lessonsCount: totalLessons,
     curriculum: JSON.stringify(chapters),
-    exam: JSON.stringify(examQuestions)
+    exam: JSON.stringify(course.pricingType === "free" ? examQuestions : [])
   };
 }
 
@@ -1312,7 +1375,7 @@ function validateCourseForPublishing(course: any, modules: any[], lessons: any[]
 }
 
 app.post("/api/courses/:id/publish", async (req, res) => {
-  db = loadData();
+  let db = loadData();
   const courseId = req.params.id;
   const courseIndex = db.courses.findIndex((c: any) => c.id === courseId);
   if (courseIndex === -1) return res.status(404).json({ error: "Course not found" });
@@ -1374,8 +1437,11 @@ app.post("/api/courses/:id/publish", async (req, res) => {
 
     const now = new Date().toISOString();
     const originalStatus = course.status;
-    db.courses[courseIndex] = {
-      ...course,
+    db = loadData();
+    const currentIndex = db.courses.findIndex((c: any) => c.id === courseId);
+    if (currentIndex < 0) throw new Error("Course was removed during publishing.");
+    db.courses[currentIndex] = {
+      ...db.courses[currentIndex],
       status: "Published", // Set status strictly to Published on success
       websiteAppId: websiteData.id,
       websitePublishedAt: now,
@@ -1394,7 +1460,7 @@ app.post("/api/courses/:id/publish", async (req, res) => {
       details: `Successfully synchronized and published course curriculum with website. Website App ID: ${websiteData.id}`
     });
 
-    res.json({ success: true, course: db.courses[courseIndex], websiteAppId: websiteData.id });
+    res.json({ success: true, course: db.courses[currentIndex], websiteAppId: websiteData.id });
   } catch (err: any) {
     console.error("[Publish] Failed to sync course to website:", err);
     res.status(502).json({ error: err.message || "Failed to publish course to the website." });
@@ -1883,6 +1949,11 @@ app.post("/api/gemini/assist", async (req, res) => {
     console.error("Gemini AI error:", error);
     res.status(500).json({ error: error.message || "Failed to generate AI content" });
   }
+});
+
+app.use((error: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('[API]', error.message);
+  res.status(error.status || 500).json({ error: error.status === 413 ? 'Request is too large.' : 'The request could not be completed. Please try again.' });
 });
 
 async function startServer() {

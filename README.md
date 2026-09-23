@@ -115,3 +115,41 @@ To deploy the Course Builder with PostgreSQL and Nginx Proxy Manager (OpenResty)
 > - The application container is configured to run on **port 3030** (`PORT=3030`).
 > - Direct host access is available at `http://cb.v79sl.duckdns.org:3030` or `http://localhost:3030`.
 > - If forwarding in Nginx Proxy Manager to container `v79_course_builder`, set **Forward Port** to `3030`.
+
+### Academy portal and memberships
+
+The public learning catalogue is at `/academy`; the authoring studio remains at `/`.
+Application filters and course counts are calculated from the current catalogue. Creating,
+importing, deleting and changing course status refreshes the admin list. The learner catalogue
+refreshes on return to the tab and every 30 seconds. Only Published/Uploaded courses appear.
+Deleting a linked website course removes its remote entry first; if the website cannot be
+reached, deletion returns an error and preserves the local record for retry. Unpublishing a
+linked course follows the same rule. Set `ACADEMY_PUBLIC_URL` to the academy's HTTPS address
+so website publications link back to the correct portal. Existing remote entries should be
+republished once to update their links. Curriculum edits still require the explicit Publish action.
+
+Choose **Free** or **Subscription access** in a course's Overview settings. Legacy Premium and
+Free Trial courses require a membership rather than silently granting access. Stripe checkout
+is deliberately disabled; the app does not collect card details or simulate successful payments.
+The **Learners & memberships** admin page supports dated membership grants, extensions,
+revocation and password resets. Integrating Stripe Checkout, verified subscription webhooks
+and the billing portal is a later setup task; adding a Stripe secret alone does not enable billing.
+
+Learners register with email and a password of at least 12 characters. Their enrolments,
+lesson progress, assignment responses, programme work and exam results are persisted in
+`data/learners.json`. Include the entire `data` directory in backups. Guest learning remains
+available for free courses; guest progress stays in the browser. Old simulated enrolment flags
+are never accepted as proof of access. Sessions expire after 12 hours and on application restart.
+
+Quiz and programme exam answers are not returned before submission. Grading is performed
+on the server. Certificates check saved lesson completion, required assignment responses and
+programme exam results, and are issued to the learner account's name. Assignment submission
+records completion, not instructor grading or accreditation.
+
+The old public default recovery key is automatically replaced. Retrieve your private recovery
+key from `data/.admin_reset_token.txt` on the server. New installations use `ADMIN_PASSWORD`
+or generate a temporary password in `data/.initial_admin_password.txt`. Neither credential is
+printed in application logs. Existing administrator passwords are retained.
+
+Validation: `npm run lint`, `npm test`, `npm run build`, then `npm run test:api`. The API tests
+use an isolated temporary data directory and never modify production course or learner records.

@@ -1,3 +1,4 @@
+import { requiresSubscription } from '../lib/academyAccess';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   GraduationCap,
@@ -62,12 +63,11 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
   const [paymentProcessing, setPaymentProcessing] = useState<boolean>(false);
   const [paymentSuccessMsg, setPaymentSuccessMsg] = useState<string | null>(null);
 
-  // Payment form mock inputs
-  const [cardName, setCardName] = useState<string>('Alex Mercer');
-  const [cardNumber, setCardNumber] = useState<string>('4242 •••• •••• 4242');
-  const [cardExpiry, setCardExpiry] = useState<string>('12/28');
-  const [cardCvc, setCardCvc] = useState<string>('123');
-
+  const [learnerId, setLearnerId] = useState<string | null>(null);
+  const [syncMessage, setSyncMessage] = useState('');
+  const [programmeRevision, setProgrammeRevision] = useState(0);
+  useEffect(() => { const saved = () => setProgrammeRevision(v => v + 1); window.addEventListener('academy-programme-saved', saved); return () => window.removeEventListener('academy-programme-saved', saved); }, []);
+  const progressLoaded = useRef(false);
   // States
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +87,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
   
   // Certificate states
   const [showCertificate, setShowCertificate] = useState<boolean>(false);
+  const [issuedCertificateId, setIssuedCertificateId] = useState('');
   const [studentName, setStudentName] = useState<string>('');
   const [certDate, setCertDate] = useState<string>(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }));
 
@@ -126,22 +127,31 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
     setProgrammeStatus(nextStatus);
   }, []);
 
+  useEffect(() => {
+    if (!course || !learnerId || loading || !progressLoaded.current || (requiresSubscription(course) && !isEnrolled)) return;
+    const timer = setTimeout(async () => {
+      try {
+        const raw = localStorage.getItem(`v79_programme_state_${learnerId}_${course.id}`);
+        const response = await fetch(`/api/learner/progress/${course.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ completedLessons, assignmentSubmissions, programmeState: raw ? JSON.parse(raw) : undefined }) });
+        if (!response.ok) throw new Error('Progress could not sync. Sign in again to save to your account.');
+        setSyncMessage('Progress saved to your account');
+      } catch (e: any) { setSyncMessage(e.message); }
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [course, learnerId, loading, completedLessons, assignmentSubmissions, programmeStatus, programmeRevision]);
+
   const isCoursePaid = (c: Course | null) => {
     if (!c) return false;
-    return c.pricingType === 'premium' || (typeof c.price === 'number' && c.price > 0);
+    return requiresSubscription(c);
   };
 
-  const isLessonIntro = (les: Lesson, lesIdx: number, modIdx: number) => {
-    if (!les) return false;
-    const titleLower = (les.title || '').toLowerCase();
-    return (modIdx === 0 && lesIdx === 0) || titleLower.includes('intro') || titleLower.includes('overview') || titleLower.includes('welcome');
-  };
+  const isLessonIntro = (_les: Lesson, _lesIdx: number, _modIdx: number) => false;
 
   const canAccessLesson = (les: Lesson, lesIdx: number, modIdx: number) => {
     if (!course) return true;
     if (!isCoursePaid(course)) return true; // Free course -> everyone has access
     if (isEnrolled) return true; // Enrolled student -> access everything
-    return isLessonIntro(les, lesIdx, modIdx); // Unenrolled -> intro lesson only
+    return false; // Paid curriculum is protected by the server.
   };
 
   // Main load course routine
@@ -161,40 +171,36 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
         setProgrammeStatus(null);
         setShowProgrammeHub(Boolean(courseData.programme));
 
-        // Check paid vs enrolled state
-        const paidCourse = courseData.pricingType === 'premium' || (typeof courseData.price === 'number' && courseData.price > 0);
-        const hasPaidInStorage = localStorage.getItem(`v79_enrolled_${courseData.id}`) === 'true';
-
-        if (paidCourse && !hasPaidInStorage) {
-          setIsEnrolled(false);
-          // Unenrolled students start at the Course Introduction overview
-          setCurrentLesson(null);
+        let loadedProgress: Record<string, boolean> = {};
+        progressLoaded.current = false;
+        setCurrentLesson(null); setCompletedLessons({}); setAssignmentSubmissions({}); setAssignments([]); setDownloads([]);
+        const paidCourse = requiresSubscription(courseData);
+        const hasPaidInStorage = courseData.hasAccess === true;
+        setIsEnrolled(!paidCourse || hasPaidInStorage);
+        const sessionRes = await fetch('/api/learner/session');
+        const session = await sessionRes.json();
+        setLearnerId(session.user?.id || null);
+        if (session.user) {
+          setStudentName(session.user.name);
+          const progressRes = await fetch(`/api/learner/progress/${courseData.id}`);
+          if (!progressRes.ok) throw new Error('Could not load your saved progress. Please sign in again.');
+          const saved = await progressRes.json();
+          loadedProgress = saved.completedLessons || {};
+          setCompletedLessons(loadedProgress);
+          setAssignmentSubmissions(saved.assignmentSubmissions || {});
+          const programmeKey = `v79_programme_state_${session.user.id}_${courseData.id}`;
+          localStorage.setItem(programmeKey, JSON.stringify(saved.programmeState || {}));
         } else {
-          setIsEnrolled(true);
-        }
-
-        // Load progress from localStorage
-        const storedProgress = localStorage.getItem(`v79_student_progress_${courseData.id}`);
-        if (storedProgress) {
           try {
-            setCompletedLessons(JSON.parse(storedProgress));
-          } catch {
-            // ignore corrupt parsing
-          }
+            setCompletedLessons(JSON.parse(localStorage.getItem(`v79_student_progress_guest_${courseData.id}`) || '{}'));
+            setAssignmentSubmissions(JSON.parse(localStorage.getItem(`v79_student_submissions_guest_${courseData.id}`) || '{}'));
+          } catch { /* Start clean if guest cache is invalid. */ }
         }
-
-        // Load assignment submissions
-        const storedSubmissions = localStorage.getItem(`v79_student_submissions_${courseData.id}`);
-        if (storedSubmissions) {
-          try {
-            setAssignmentSubmissions(JSON.parse(storedSubmissions));
-          } catch {
-            // ignore
-          }
-        }
+        progressLoaded.current = true;
 
         // Fetch Modules
         const modulesRes = await fetch(`/api/public/courses/${courseData.id}/modules`);
+        if (!modulesRes.ok) throw new Error("Could not load the course outline.");
         const modulesData = await modulesRes.json();
         setModules(modulesData);
 
@@ -204,6 +210,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
         for (let mIdx = 0; mIdx < modulesData.length; mIdx++) {
           const m = modulesData[mIdx];
           const lessonsRes = await fetch(`/api/public/modules/${m.id}/lessons`);
+          if (!lessonsRes.ok) throw new Error("Could not load course lessons.");
           const lessonsData = await lessonsRes.json();
           lMap[m.id] = lessonsData;
           if (!firstLesson && lessonsData.length > 0) {
@@ -217,7 +224,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
         if (courseData.programme) {
           setCurrentLesson(null);
         } else if ((!paidCourse || hasPaidInStorage) && firstLesson) {
-          setCurrentLesson(firstLesson);
+          setCurrentLesson(Object.values(lMap).flat().find(lesson => !loadedProgress[lesson.id]) || firstLesson);
         }
 
         // Fetch course-wide assignments & downloads
@@ -246,6 +253,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
   // Handle active lesson context switching (fetching quiz & blocks)
   useEffect(() => {
     if (!currentLesson) return;
+    const controller = new AbortController();
 
     // Scroll back to top of center main screen
     if (mainContentRef.current) {
@@ -257,18 +265,19 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
     setQuizSubmitted(false);
     setQuizScore(null);
     setCurrentAssignmentText('');
+    setContentBlocks([]); setActiveQuiz(null);
 
     const fetchLessonSubCollections = async () => {
       try {
         // Fetch Content Blocks
-        const blockRes = await fetch(`/api/public/lessons/${currentLesson.id}/content-blocks`);
+        const blockRes = await fetch(`/api/public/lessons/${currentLesson.id}/content-blocks`, { signal: controller.signal });
         if (blockRes.ok) {
           const blockData = await blockRes.json();
           setContentBlocks(blockData || []);
         }
 
         // Fetch Quiz
-        const quizRes = await fetch(`/api/public/lessons/${currentLesson.id}/quiz`);
+        const quizRes = await fetch(`/api/public/lessons/${currentLesson.id}/quiz`, { signal: controller.signal });
         if (quizRes.ok) {
           const quizData = await quizRes.json();
           setActiveQuiz(quizData);
@@ -281,6 +290,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
     };
 
     fetchLessonSubCollections();
+    return () => controller.abort();
   }, [currentLesson]);
 
   // Persist completion status when updated
@@ -288,47 +298,12 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
     if (!course) return;
     const nextCompleted = { ...completedLessons, [lessonId]: !completedLessons[lessonId] };
     setCompletedLessons(nextCompleted);
-    localStorage.setItem(`v79_student_progress_${course.id}`, JSON.stringify(nextCompleted));
+    localStorage.setItem(`v79_student_progress_${learnerId || "guest"}_${course.id}`, JSON.stringify(nextCompleted));
   };
 
   // Check if a specific lesson is completed
   const isLessonCompleted = (lessonId: string) => {
     return !!completedLessons[lessonId];
-  };
-
-  // Process payment
-  const handleProcessPayment = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!course) return;
-    setPaymentProcessing(true);
-    setTimeout(() => {
-      localStorage.setItem(`v79_enrolled_${course.id}`, 'true');
-      setIsEnrolled(true);
-      setPaymentProcessing(false);
-      setShowPaymentModal(false);
-      setPaymentSuccessMsg(`🎉 Payment Successful! You are now fully enrolled in "${course.title}". All modules and lectures are unlocked.`);
-      
-      // Select first lesson
-      if (modules.length > 0 && lessonsMap[modules[0].id]?.length > 0) {
-        setCurrentLesson(lessonsMap[modules[0].id][0]);
-        setCurrentModuleIndex(0);
-        setShowProgrammeHub(false);
-      }
-    }, 750);
-  };
-
-  // Toggle demo enrollment status (for quick evaluation)
-  const toggleDemoEnrollment = () => {
-    if (!course) return;
-    const nextState = !isEnrolled;
-    setIsEnrolled(nextState);
-    localStorage.setItem(`v79_enrolled_${course.id}`, nextState ? 'true' : 'false');
-    if (nextState) {
-      setPaymentSuccessMsg("Demo Access Granted: Enrolled mode enabled.");
-    } else {
-      setPaymentSuccessMsg("Demo Mode: Switched to Unenrolled Preview state.");
-      setCurrentLesson(null);
-    }
   };
 
   // Calculate stats
@@ -338,7 +313,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
       totalLessons += list.length;
     }
   });
-  const completedCount = Object.keys(completedLessons).filter(id => completedLessons[id]).length;
+  const completedCount = (Object.values(lessonsMap) as Lesson[][]).flat().filter(lesson => completedLessons[lesson.id]).length;
   const progressPercent = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
   const certificateEligible = course?.programme
     ? programmeStatus?.readyForCertificate === true
@@ -347,7 +322,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
   useEffect(() => {
     if (!course?.programme) return;
     try {
-      const raw = localStorage.getItem(`v79_programme_state_${course.id}`);
+      const raw = localStorage.getItem(`v79_programme_state_${learnerId || "guest"}_${course.id}`);
       const saved = normalizeProgrammeState(raw ? JSON.parse(raw) : null, course.programme.version);
       const requiredAssignments = assignments.filter((assignment) => assignment.courseId === course.id && (assignment as Assignment & { required?: boolean }).required !== false);
       const submittedCount = requiredAssignments.filter((assignment) => Boolean(assignmentSubmissions[assignment.id])).length;
@@ -377,25 +352,23 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
   };
 
   // Handle Quiz Submissions
-  const handleQuizSubmit = () => {
-    if (!activeQuiz) return;
-    let correct = 0;
-    activeQuiz.questions.forEach((q) => {
-      if (quizAnswers[q.id] === q.correctAnswer) {
-        correct++;
-      }
-    });
-
-    const score = Math.round((correct / activeQuiz.questions.length) * 100);
-    setQuizScore(score);
-    setQuizSubmitted(true);
-
-    if (score >= activeQuiz.passingScore && currentLesson) {
-      // Mark lesson as complete upon passing the quiz
-      const nextCompleted = { ...completedLessons, [currentLesson.id]: true };
-      setCompletedLessons(nextCompleted);
-      localStorage.setItem(`v79_student_progress_${course!.id}`, JSON.stringify(nextCompleted));
-    }
+  const handleQuizSubmit = async () => {
+    if (!activeQuiz || !currentLesson) return;
+    try {
+      const response = await fetch(`/api/public/lessons/${currentLesson.id}/quiz/submit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: quizAnswers }) });
+      const result = await response.json(); if (!response.ok) throw new Error(result.error);
+      setQuizScore(result.score); setQuizSubmitted(true);
+      if (result.score >= activeQuiz.passingScore) setCompletedLessons(current => ({ ...current, [currentLesson.id]: true }));
+    } catch (e: any) { setSyncMessage(e.message); }
+  };
+  const claimCertificate = async () => {
+    if (!course) return;
+    if (!learnerId) { setSyncMessage('Sign in to your learner account to earn and save a certificate.'); return; }
+    try {
+      const response = await fetch(`/api/learner/certificate/${course.id}`, { method: 'POST' }); const certificate = await response.json();
+      if (!response.ok) throw new Error(certificate.error);
+      setIssuedCertificateId(certificate.id); setStudentName(certificate.name); setCertDate(new Date(certificate.issuedAt).toLocaleDateString()); setShowCertificate(true);
+    } catch (e: any) { setSyncMessage(e.message); }
   };
 
   // Handle Assignment Submissions
@@ -404,7 +377,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
     
     const newSubmission = {
       text: currentAssignmentText,
-      fileSubmitted: true,
+      fileSubmitted: false,
       submittedAt: new Date().toLocaleDateString()
     };
 
@@ -414,12 +387,12 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
     };
 
     setAssignmentSubmissions(nextSubmissions);
-    localStorage.setItem(`v79_student_submissions_${course.id}`, JSON.stringify(nextSubmissions));
+    localStorage.setItem(`v79_student_submissions_${learnerId || "guest"}_${course.id}`, JSON.stringify(nextSubmissions));
     
     // Auto-mark lesson complete upon submitting assignments
     const nextCompleted = { ...completedLessons, [currentLesson.id]: true };
     setCompletedLessons(nextCompleted);
-    localStorage.setItem(`v79_student_progress_${course.id}`, JSON.stringify(nextCompleted));
+    localStorage.setItem(`v79_student_progress_${learnerId || "guest"}_${course.id}`, JSON.stringify(nextCompleted));
 
     setCurrentAssignmentText('');
   };
@@ -544,10 +517,10 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
   // Find currently active lesson's module name
   const currentModule = modules.find(m => m.id === currentLesson?.moduleId);
   const paidCourse = isCoursePaid(course);
-  const coursePriceFormatted = course.price && course.price > 0 ? `$${course.price.toFixed(2)}` : '$49.99';
+  const coursePriceFormatted = 'Academy subscription';
 
   return (
-    <div className="min-h-screen bg-slate-50 flex text-slate-800 font-sans antialiased overflow-hidden h-screen">
+    <div className="classroom-shell min-h-screen bg-slate-50 flex text-slate-800 font-sans antialiased overflow-hidden h-screen">
       
       {/* 1. Left Navigation Sidebar (Classroom Index) */}
       <aside className="w-80 bg-white border-r border-slate-200 flex flex-col shrink-0 h-full overflow-hidden">
@@ -625,7 +598,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
               <span>Course Introduction</span>
             </div>
             <span className="text-[10px] opacity-80 uppercase font-semibold">
-              {!isEnrolled && paidCourse ? 'Preview Intro' : 'Overview'}
+              {!isEnrolled && paidCourse ? 'Course details' : 'Overview'}
             </span>
           </button>
 
@@ -635,9 +608,9 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
               <div className="flex items-start gap-2">
                 <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
                 <div className="text-[11px] text-amber-900 font-medium leading-tight">
-                  <p className="font-bold text-amber-950">Payment Required</p>
+                  <p className="font-bold text-amber-950">Membership required</p>
                   <p className="mt-0.5 text-amber-800 text-[10px]">
-                    Pay <strong className="font-extrabold">{coursePriceFormatted}</strong> to unlock all modules, videos, assignments, and certificates.
+                    An active academy membership is needed for this course.
                   </p>
                 </div>
               </div>
@@ -646,7 +619,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                 className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors flex items-center justify-center gap-1.5"
               >
                 <CreditCard className="w-3.5 h-3.5" />
-                <span>Enroll Now ({coursePriceFormatted})</span>
+                <span>View membership options</span>
               </button>
             </div>
           )}
@@ -678,8 +651,8 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
           {/* Certificate Badge Callout */}
           {isEnrolled && certificateEligible && (
             <button
-              onClick={() => setShowCertificate(true)}
-              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5 animate-bounce"
+              onClick={claimCertificate}
+              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5 "
             >
               <Award className="w-4 h-4" />
               Claim Your Certificate
@@ -778,15 +751,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
             <GraduationCap className="w-5 h-5 text-indigo-600" />
             <span className="text-xs font-bold text-slate-800">Student Portal</span>
           </div>
-          {paidCourse && (
-            <button
-              onClick={toggleDemoEnrollment}
-              className="text-[9px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-1 rounded transition-colors"
-              title="Toggle enrollment state for testing"
-            >
-              {isEnrolled ? 'Switch to Unenrolled' : 'Toggle Enrolled'}
-            </button>
-          )}
+
         </div>
       </aside>
 
@@ -796,6 +761,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
         className="flex-1 overflow-y-auto flex flex-col h-full bg-slate-50"
       >
         
+        <div role="status" className="px-5 py-2 text-xs bg-indigo-50 text-indigo-900 flex justify-between gap-3"><a href="/academy">← Course catalogue</a><span>{learnerId ? syncMessage || 'Account progress enabled' : 'Guest progress stays on this browser. Sign in to save across devices.'}</span></div>
         {/* Dynamic Header */}
         <header className="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0 sticky top-0 z-10">
           <div className="flex items-center gap-2">
@@ -829,7 +795,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                 className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5"
               >
                 <CreditCard className="w-3.5 h-3.5" />
-                <span>Enroll for {coursePriceFormatted}</span>
+                <span>View access options</span>
               </button>
             )}
           </div>
@@ -854,6 +820,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
         {showProgrammeHub && course.programme ? (
           <BusinessAdvantageProgramme
             courseId={course.id}
+                storageScope={learnerId || "guest"}
             programme={course.programme}
             modules={modules}
             lessonsMap={lessonsMap}
@@ -905,7 +872,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                     <>
                       <div className="space-y-1">
                         <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                          Course Tuition Fee
+                          Course access
                         </span>
                         <div className="text-3xl font-black text-slate-900">
                           {coursePriceFormatted}
@@ -929,10 +896,10 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                             className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
                           >
                             <CreditCard className="w-4 h-4" />
-                            <span>Enroll & Pay {coursePriceFormatted}</span>
+                            <span>View membership options</span>
                           </button>
                           <p className="text-[10px] text-slate-400">
-                            Instant full access to all video lectures, quizzes, and course completion certificate.
+                            Online subscriptions are coming soon. Existing members can sign in.
                           </p>
                         </div>
                       )}
@@ -1006,7 +973,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                     {!isEnrolled && paidCourse && (
                       <span className="text-[10px] text-amber-800 bg-amber-50 px-2.5 py-1 rounded-md font-bold border border-amber-200 flex items-center gap-1">
                         <Lock className="w-3 h-3 text-amber-600" />
-                        <span>Intro Lesson Free Preview</span>
+                        <span>Membership required</span>
                       </span>
                     )}
                   </div>
@@ -1133,7 +1100,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                       onClick={() => setShowPaymentModal(true)}
                       className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs shadow-md transition-colors"
                     >
-                      Unlock Everything ({coursePriceFormatted})
+                      View membership options
                     </button>
                   )}
                 </div>
@@ -1153,14 +1120,14 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                   <Info className="w-5 h-5 text-amber-600 shrink-0" />
                   <div>
                     <p className="font-bold">Viewing Free Course Introduction Preview</p>
-                    <p className="text-[11px] text-amber-800">Enroll today to access all remaining modules, quizzes, and certification.</p>
+                    <p className="text-[11px] text-amber-800">An active membership is required for this course. Online subscriptions are coming soon.</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setShowPaymentModal(true)}
                   className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shrink-0 shadow-xs"
                 >
-                  Pay {coursePriceFormatted} to Unlock All
+                  View membership options
                 </button>
               </div>
             )}
@@ -1243,7 +1210,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                       {block.type === 'Markdown' && data.markdown && renderMarkdown(data.markdown)}
                       
                       {block.type === 'Rich Text' && data.html && (
-                        <div className="text-sm text-slate-700 leading-relaxed font-normal" dangerouslySetInnerHTML={{ __html: data.html }} />
+                        <iframe title="Lesson reading" sandbox="" srcDoc={data.html} className="w-full min-h-96 border-0" />
                       )}
 
                       {block.type === 'Video' && data.videoUrl && (
@@ -1495,14 +1462,14 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
 
                       <div className="flex justify-between items-center pt-1">
                         <p className="text-[10px] text-emerald-800/80">
-                          Status: <span className="font-bold">Passed</span> (Mastery Checked)
+                          Status: <span className="font-bold">Response saved</span> · Self-directed activity
                         </p>
                         <button
                           onClick={() => {
                             const nextSubs = { ...assignmentSubmissions };
                             delete nextSubs[assign.id];
                             setAssignmentSubmissions(nextSubs);
-                            localStorage.setItem(`v79_student_submissions_${course.id}`, JSON.stringify(nextSubs));
+                            localStorage.setItem(`v79_student_submissions_${learnerId || "guest"}_${course.id}`, JSON.stringify(nextSubs));
                           }}
                           className="text-[10px] font-bold text-rose-600 hover:text-rose-800 underline"
                         >
@@ -1530,13 +1497,9 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                       {assign.submissionType === 'file' && (
                         <div className="p-5 rounded-xl border-2 border-dashed border-slate-200 hover:border-indigo-400 text-center space-y-1 transition-all">
                           <FileCode className="w-8 h-8 text-slate-300 mx-auto" />
-                          <p className="text-xs font-semibold text-slate-700">Upload assignment attachment</p>
-                          <p className="text-[10px] text-slate-400">PDF, ZIP, or spreadsheet files supported up to 50MB</p>
-                          <div className="pt-2">
-                            <span className="px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-[10px] font-bold cursor-pointer transition-colors inline-block">
-                              Choose File
-                            </span>
-                          </div>
+                          <p className="text-xs font-semibold text-slate-700">Include a link to your work in the response above</p>
+                          <p className="text-[10px] text-slate-400">Use a shareable document link that your instructor can open.</p>
+
                         </div>
                       )}
 
@@ -1560,7 +1523,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
             <div className="pt-6 border-t border-slate-200 flex justify-between items-center text-xs text-slate-500 font-medium">
               <span className="flex items-center gap-1">
                 <HelpCircle className="w-4 h-4 text-indigo-500" />
-                Need help? Your instructor is just an email away.
+                Use the course outline to review earlier lessons.
               </span>
               <p className="text-[11px] text-slate-400">Course version {course.courseVersion}</p>
             </div>
@@ -1588,7 +1551,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                 <input
                   type="text"
                   value={studentName}
-                  onChange={(e) => setStudentName(e.target.value)}
+                  readOnly
                   className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 font-semibold text-slate-800"
                 />
               </div>
@@ -1597,7 +1560,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                 <input
                   type="text"
                   value={certDate}
-                  onChange={(e) => setCertDate(e.target.value)}
+                  readOnly
                   className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 font-semibold text-slate-800"
                 />
               </div>
@@ -1651,8 +1614,8 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                 <p className="text-[10px] text-slate-400 font-semibold mt-1">
                   {course.programme ? 'Practical Business Success for Caribbean Entrepreneurs' : `V79 Application Core Focus: ${course.category}`}
                 </p>
-                {programmeStatus?.certificateId && (
-                  <p className="text-[9px] text-slate-500 font-mono mt-2">Credential ID: {programmeStatus.certificateId}</p>
+                {issuedCertificateId && (
+                  <p className="text-[9px] text-slate-500 font-mono mt-2">Credential ID: {issuedCertificateId}</p>
                 )}
               </div>
 
@@ -1682,120 +1645,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
         </div>
       )}
 
-      {/* 4. Payment Checkout Modal */}
-      {showPaymentModal && course && (
-        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 space-y-6 relative border border-slate-100 shadow-2xl">
-            
-            <button
-              onClick={() => setShowPaymentModal(false)}
-              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-xl transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="space-y-1">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 uppercase tracking-wider">
-                <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                <span>Secure Course Enrollment</span>
-              </div>
-              <h2 className="text-xl font-bold text-slate-900">{course.title}</h2>
-              <p className="text-xs text-slate-500">Instructor: {course.instructor}</p>
-            </div>
-
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-              <div className="flex justify-between items-center text-xs text-slate-600">
-                <span>Tuition Fee</span>
-                <span className="font-bold text-slate-800">{coursePriceFormatted}</span>
-              </div>
-              <div className="flex justify-between items-center text-xs text-slate-600">
-                <span>Platform Access & Certificate Fee</span>
-                <span className="text-emerald-600 font-semibold">FREE</span>
-              </div>
-              <div className="border-t border-slate-200 pt-2 flex justify-between items-center text-sm font-bold text-slate-900">
-                <span>Total Due Today</span>
-                <span className="text-indigo-600 text-lg">{coursePriceFormatted}</span>
-              </div>
-            </div>
-
-            <form onSubmit={handleProcessPayment} className="space-y-4">
-              <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-700">Cardholder Name</label>
-                <input
-                  type="text"
-                  required
-                  value={cardName}
-                  onChange={(e) => setCardName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 focus:bg-white focus:ring-1 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-700">Card Number</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    value={cardNumber}
-                    onChange={(e) => setCardNumber(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-800 font-mono focus:bg-white focus:ring-1 focus:ring-indigo-500"
-                  />
-                  <CreditCard className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="block text-xs font-semibold text-slate-700">Expiry (MM/YY)</label>
-                  <input
-                    type="text"
-                    required
-                    value={cardExpiry}
-                    onChange={(e) => setCardExpiry(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 font-mono focus:bg-white focus:ring-1 focus:ring-indigo-500"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-semibold text-slate-700">CVC / CVV</label>
-                  <input
-                    type="text"
-                    required
-                    value={cardCvc}
-                    onChange={(e) => setCardCvc(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 font-mono focus:bg-white focus:ring-1 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  disabled={paymentProcessing}
-                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-60"
-                >
-                  {paymentProcessing ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Authorizing Payment...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Lock className="w-3.5 h-3.5" />
-                      <span>Complete Payment ({coursePriceFormatted})</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-              <p className="text-[10px] text-center text-slate-400 flex items-center justify-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-emerald-500" />
-                <span>256-Bit TLS Simulated SSL Checkout. Instant Unlock.</span>
-              </p>
-            </form>
-
-          </div>
-        </div>
-      )}
+      {showPaymentModal && course && <div className="fixed inset-0 z-50 bg-slate-900/70 flex items-center justify-center p-5"><section role="dialog" aria-modal="true" aria-labelledby="subscription-title" className="bg-white rounded-3xl max-w-md p-8 space-y-5 relative"><button aria-label="Close access options" onClick={() => setShowPaymentModal(false)} className="absolute top-4 right-4 p-2"><X size={20}/></button><Lock className="text-indigo-600" size={32}/><h2 id="subscription-title" className="text-2xl font-bold">Academy membership</h2><p className="text-slate-600">This course requires an active subscription. Online subscriptions are coming soon.</p><p className="text-sm text-slate-500">Already a member? Sign in with your learner account. Contact the academy administrator if you need access.</p><a href="/academy" className="academy-primary inline-block">Go to my account</a><p className="text-xs text-slate-500">No payment has been taken.</p></section></div>}
 
     </div>
   );

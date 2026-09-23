@@ -1,1 +1,18 @@
 @import "tailwindcss";
+
+.academy-primary { background:#4f46e5; color:white; border-radius:.8rem; padding:.75rem 1.2rem; font-weight:650; font-size:.9rem; }
+.academy-primary:hover { background:#4338ca; }
+.academy-primary:disabled { opacity:.55; cursor:wait; }
+.academy-tab { padding:.6rem .8rem; border-radius:.7rem; }
+.academy-tab.active { background:#eef2ff; color:#4338ca; }
+.academy-input { display:block; width:100%; border:1px solid #cbd5e1; border-radius:.7rem; padding:.8rem; margin-top:.4rem; font-weight:400; }
+button, a, input, select, textarea { touch-action:manipulation; }
+:focus-visible { outline:3px solid #818cf8; outline-offset:3px; }
+@media (prefers-reduced-motion:reduce) { *, *::before, *::after { animation-duration:.01ms !important; transition-duration:.01ms !important; scroll-behavior:auto !important; } }
+@media (max-width:767px) { .admin-shell { flex-direction:column; } .admin-shell > aside { width:100%; max-height:22rem; } .classroom-shell { flex-direction:column; height:auto !important; min-height:100vh; } .classroom-shell > aside { width:100% !important; max-height:45vh; } .classroom-shell > div { min-height:55vh; } }
+@media print {
+  body * { visibility: hidden; }
+  #v79-certificate-canvas, #v79-certificate-canvas * { visibility: visible; }
+  #v79-certificate-canvas { position: fixed; inset: 0; width: 100%; background: white; padding: 2rem; border: 8px solid #d4a137; }
+  @page { size: landscape; margin: 12mm; }
+}

@@ -1,7 +1,9 @@
 import React from 'react';
+import { Course } from '../types';
 import { BookOpen, LayoutDashboard, Settings, GraduationCap, PlusCircle, UploadCloud, Image, FileCheck } from 'lucide-react';
 
 interface SidebarProps {
+  courses: Course[];
   currentView: string;
   setCurrentView: (view: string) => void;
   selectedAppCategory: string;
@@ -9,14 +11,8 @@ interface SidebarProps {
   userRole: 'Admin' | 'Instructor' | 'Student';
 }
 
-export function Sidebar({ currentView, setCurrentView, selectedAppCategory, setSelectedAppCategory, userRole }: SidebarProps) {
-  const categories = [
-    'All Applications',
-    'Fire Finance Pro (FFPRO2)',
-    'SIWM',
-    'Tiquet',
-    'KashDash'
-  ];
+export function Sidebar({ courses, currentView, setCurrentView, selectedAppCategory, setSelectedAppCategory, userRole }: SidebarProps) {
+  const categories = ['All Applications', ...Array.from(new Set(courses.map(c => c.category || 'General'))).sort()];
 
   const canEdit = userRole === 'Admin' || userRole === 'Instructor';
   const isAdmin = userRole === 'Admin';
@@ -30,7 +26,7 @@ export function Sidebar({ currentView, setCurrentView, selectedAppCategory, setS
         </div>
         <div>
           <h1 className="font-bold text-white text-base tracking-wide">V79 Academy</h1>
-          <p className="text-xs text-indigo-400 font-medium">Course Builder v2.4</p>
+          <p className="text-xs text-indigo-400 font-medium">Authoring studio</p>
         </div>
       </div>
 
@@ -116,7 +112,7 @@ export function Sidebar({ currentView, setCurrentView, selectedAppCategory, setS
                   key={cat}
                   onClick={() => {
                     setSelectedAppCategory(cat);
-                    if (currentView !== 'courses' && currentView !== 'dashboard') {
+                    if (currentView !== 'courses') {
                       setCurrentView('courses');
                     }
                   }}
@@ -127,15 +123,14 @@ export function Sidebar({ currentView, setCurrentView, selectedAppCategory, setS
                   }`}
                 >
                   <span className="truncate">{cat}</span>
-                  {cat !== 'All Applications' && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                  )}
+                  <span className="rounded-full bg-slate-700 px-2 py-0.5 text-[10px]">{cat === 'All Applications' ? courses.length : courses.filter(c => c.category === cat).length}</span>
                 </button>
               ))}
             </div>
           </div>
         )}
 
+        <button onClick={() => setCurrentView('learners')} className={`w-full text-left px-3 py-3 rounded-xl text-sm font-semibold ${currentView === 'learners' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800'}`}>Learners & memberships</button>
         {/* Assets & Deployments */}
         {canEdit && (
           <div className="space-y-1">

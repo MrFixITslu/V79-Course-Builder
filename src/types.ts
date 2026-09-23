@@ -6,7 +6,7 @@ export type DifficultyLevel = 'Beginner' | 'Intermediate' | 'Advanced';
 
 export type CourseStatus = 'Draft' | 'Review' | 'Ready for Upload' | 'Uploaded' | 'Imported' | 'Published' | 'Archived';
 
-export type PricingType = 'free' | 'free_trial' | 'premium';
+export type PricingType = 'free' | 'free_trial' | 'premium' | 'subscription';
 
 export interface Course {
   id: string;
@@ -31,6 +31,10 @@ export interface Course {
   websiteAppId?: number;
   websitePublishedAt?: string;
   programme?: CourseProgramme;
+  hasAccess?: boolean;
+  hasProgramme?: boolean;
+  moduleCount?: number;
+  lessonCount?: number;
 }
 
 export interface Module {
