@@ -9,6 +9,8 @@ export function JuniorAcademyManagement() {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [leaderChoice, setLeaderChoice] = useState<Record<string,string>>({});
+  const [manualSelection, setManualSelection] = useState<string[]>([]);
+  const [manualTeamName, setManualTeamName] = useState('');
 
   async function refresh() {
     setBusy(true);
@@ -41,6 +43,43 @@ export function JuniorAcademyManagement() {
       setMessage(`Created ${data.created} new studio team(s) of exactly three.${leftover ? ' Still unassigned because a full team of three cannot be formed yet: ' + leftover : ''}`);
       await refresh();
     } catch(e:any) { setMessage(e.message); } finally { setBusy(false); }
+  }
+
+  async function createManualTeam() {
+    if (manualSelection.length !== 3) {
+      setMessage('Choose exactly three unassigned learners for a studio team.');
+      return;
+    }
+    setBusy(true); setMessage('');
+    try {
+      const r = await fetch(`/api/junior-admin/${JUNIOR_COURSE_ID}/teams`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          name: manualTeamName.trim(),
+          memberIds: manualSelection,
+          leaderId: manualSelection[0]
+        })
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error);
+      setManualSelection([]);
+      setManualTeamName('');
+      setMessage(`Created ${data.team.name} with three selected learners. The first selected learner starts as Team Leader and can be rotated later.`);
+      await refresh();
+    } catch(e:any) {
+      setMessage(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toggleManualLearner(id:string) {
+    setManualSelection(current => {
+      if (current.includes(id)) return current.filter(x => x !== id);
+      if (current.length >= 3) return current;
+      return [...current, id];
+    });
   }
 
   async function rotateLeader(team:any) {
@@ -96,7 +135,28 @@ export function JuniorAcademyManagement() {
     </div>
 
     {message && <p role="status" className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-900">{message}</p>}
-    {unassigned.length > 0 && <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-900"><b>Waiting for a full team of 3:</b> {unassigned.map((l:any)=>l.name).join(', ')}. Keep these learners unassigned until three are available, or adjust enrollment manually.</div>}
+    {unassigned.length > 0 && <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-900"><b>Unassigned learners:</b> {unassigned.map((l:any)=>l.name).join(', ')}. Auto-form full teams or choose three manually below.</div>}
+
+    {unassigned.length >= 3 && <div className="bg-white border rounded-2xl p-5 space-y-4">
+      <div>
+        <h2 className="font-black text-slate-900">Create a team manually</h2>
+        <p className="text-xs text-slate-500 mt-1">Choose exactly three learners. The first learner you select starts as Team Leader; leadership can rotate later.</p>
+      </div>
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+        {unassigned.map((learner:any)=>{
+          const selected = manualSelection.includes(learner.id);
+          const order = manualSelection.indexOf(learner.id);
+          return <button key={learner.id} type="button" onClick={()=>toggleManualLearner(learner.id)} className={`text-left rounded-xl border p-3 text-sm ${selected ? 'border-indigo-500 bg-indigo-50 text-indigo-900' : 'border-slate-200 bg-slate-50'}`}>
+            <span className="font-bold">{selected ? `${order + 1}. ` : ''}{learner.name}</span>
+            <span className="block text-[11px] text-slate-500 mt-1">{learner.email}</span>
+          </button>;
+        })}
+      </div>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input value={manualTeamName} onChange={e=>setManualTeamName(e.target.value)} placeholder="Optional team name" className="academy-input flex-1"/>
+        <button disabled={busy || manualSelection.length !== 3} onClick={createManualTeam} className="academy-primary sm:self-end">Create selected team ({manualSelection.length}/3)</button>
+      </div>
+    </div>}
 
     <div className="grid sm:grid-cols-3 gap-4">
       <div className="p-5 bg-white border rounded-xl"><p className="text-sm text-slate-500">Studio teams</p><p className="text-3xl font-bold mt-2">{teams.length}</p></div>
