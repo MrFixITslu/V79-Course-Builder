@@ -1438,7 +1438,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
             )}
 
             {/* 7. Assignments */}
-            {assignments.filter(a => a.lessonId === currentLesson.id).map((assign) => {
+            {course.id !== 'course-junior-ai-academy-01' && assignments.filter(a => a.lessonId === currentLesson.id).map((assign) => {
               const submission = assignmentSubmissions[assign.id];
               return (
                 <div key={assign.id} className="bg-white border border-slate-200 p-8 rounded-2xl space-y-5 shadow-2xs">
