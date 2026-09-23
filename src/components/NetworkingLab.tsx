@@ -187,20 +187,11 @@ const labs: Lab[] = [
     ]
   },
   {
-    title: 'NOC Incident',
-    scenario: 'Users report an outage. Monitoring shows the distribution switch is reachable, one VLAN gateway is down, and Internet service is otherwise healthy.',
+    title: 'NOC Incident & Engineer Demo',
+    scenario: 'Users report an outage just before Demo Day. Diagnose the incident from evidence, then defend the final network design to the instructor.',
     challenges: [
-      { prompt: 'What should the incident team do first?', options: ['Confirm impact and scope', 'Blame a teammate', 'Delete logs'], answer: 'Confirm impact and scope', explanation: 'Scope tells you who/what is affected and guides priority.' },
-      { prompt: 'What should incident notes separate?', options: ['Observed facts from assumptions', 'Routers from switches only', 'Cables from labels'], answer: 'Observed facts from assumptions', explanation: 'Clear notes prevent guesses from becoming “facts.”' },
-      { prompt: 'What is the purpose of a post-incident review?', options: ['Learn and prevent recurrence', 'Hide the root cause', 'Remove monitoring'], answer: 'Learn and prevent recurrence', explanation: 'Post-incident work should improve systems and process.' }
-    ]
-  },
-  {
-    title: 'Engineer Demo',
-    scenario: 'The instructor asks you to explain and defend your final network design.',
-    challenges: [
+      { prompt: 'What should the incident team do first?', options: ['Confirm impact and scope', 'Blame a teammate', 'Delete logs'], answer: 'Confirm impact and scope', explanation: 'Scope tells you who and what is affected and guides priority.' },
       { prompt: 'What is the strongest answer to “Why this switch?”', options: ['It meets port, speed, PoE, management and growth requirements', 'I liked the colour', 'It was first in a list'], answer: 'It meets port, speed, PoE, management and growth requirements', explanation: 'Engineering choices should map to requirements.' },
-      { prompt: 'What should never be placed in a public portfolio diagram?', options: ['Passwords/secrets', 'VLAN names', 'Generic device icons'], answer: 'Passwords/secrets', explanation: 'Documentation should show design without exposing credentials.' },
       { prompt: 'What proves the network works?', options: ['Documented test evidence', 'A confident guess', 'The rack looks neat'], answer: 'Documented test evidence', explanation: 'Testing turns design claims into evidence.' }
     ]
   }
