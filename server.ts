@@ -1275,7 +1275,9 @@ function buildWebsitePayload(course: any, modules: any[], lessons: any[], quizze
     category: "courses",
     pricingType: course.pricingType || "free",
     price: ["premium", "subscription"].includes(course.pricingType) ? Number(course.price) || 0 : 0,
-    logoUrl: course.thumbnail || "lucide:GraduationCap",
+    logoUrl: course.thumbnail?.startsWith("/")
+      ? `${(process.env.ACADEMY_PUBLIC_URL || "").replace(/\/$/, "")}${course.thumbnail}`
+      : course.thumbnail || "lucide:GraduationCap",
     accessUrl: `${(process.env.ACADEMY_PUBLIC_URL || "").replace(/\/$/, "")}/course/${course.id}`,
     instructor: course.instructor || "",
     duration: course.estimatedDuration || "",
@@ -1317,6 +1319,7 @@ function validateCourseForPublishing(course: any, modules: any[], lessons: any[]
 
   const isValidUrl = (str: string) => {
     if (!str || str.trim() === "") return true; // optional fields are fine if empty
+    if (str.startsWith("/")) return true; // same-origin Academy asset
     try {
       const url = new URL(str);
       return url.protocol === "http:" || url.protocol === "https:";
