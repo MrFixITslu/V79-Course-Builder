@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1600" viewBox="0 0 1200 1600">
+<rect width="1200" height="1600" fill="#f8fafc"/>
+<rect width="1200" height="180" fill="#c2410c"/>
+<text x="70" y="78" font-family="Arial" font-size="50" font-weight="900" fill="#fff">Risk / Uh-Oh Plan</text>
+<text x="70" y="128" font-family="Arial" font-size="24" font-weight="600" fill="#fff">Spot problems early, choose an owner, and make a backup plan.</text>
+<rect x="70" y="245" width="1060" height="174" rx="24" fill="#ffffff" stroke="#cbd5e1" stroke-width="3"/>
+<text x="105" y="293" font-family="Arial" font-size="30" font-weight="800" fill="#c2410c">What could go wrong?</text>
+<line x1="105" y1="333" x2="1090" y2="333" stroke="#cbd5e1" stroke-width="2"/><line x1="105" y1="377" x2="1090" y2="377" stroke="#cbd5e1" stroke-width="2"/><rect x="70" y="447" width="1060" height="130" rx="24" fill="#ffffff" stroke="#cbd5e1" stroke-width="3"/>
+<text x="105" y="495" font-family="Arial" font-size="30" font-weight="800" fill="#c2410c">How likely / serious is it?  Low • Medium • High</text>
+<line x1="105" y1="535" x2="1090" y2="535" stroke="#cbd5e1" stroke-width="2"/><rect x="70" y="605" width="1060" height="218" rx="24" fill="#ffffff" stroke="#cbd5e1" stroke-width="3"/>
+<text x="105" y="653" font-family="Arial" font-size="30" font-weight="800" fill="#c2410c">What can we do before it happens?</text>
+<line x1="105" y1="693" x2="1090" y2="693" stroke="#cbd5e1" stroke-width="2"/><line x1="105" y1="737" x2="1090" y2="737" stroke="#cbd5e1" stroke-width="2"/><line x1="105" y1="781" x2="1090" y2="781" stroke="#cbd5e1" stroke-width="2"/><rect x="70" y="851" width="1060" height="218" rx="24" fill="#ffffff" stroke="#cbd5e1" stroke-width="3"/>
+<text x="105" y="899" font-family="Arial" font-size="30" font-weight="800" fill="#c2410c">What is our backup plan?</text>
+<line x1="105" y1="939" x2="1090" y2="939" stroke="#cbd5e1" stroke-width="2"/><line x1="105" y1="983" x2="1090" y2="983" stroke="#cbd5e1" stroke-width="2"/><line x1="105" y1="1027" x2="1090" y2="1027" stroke="#cbd5e1" stroke-width="2"/><rect x="70" y="1097" width="1060" height="174" rx="24" fill="#ffffff" stroke="#cbd5e1" stroke-width="3"/>
+<text x="105" y="1145" font-family="Arial" font-size="30" font-weight="800" fill="#c2410c">Who owns this risk and when will we check it?</text>
+<line x1="105" y1="1185" x2="1090" y2="1185" stroke="#cbd5e1" stroke-width="2"/><line x1="105" y1="1229" x2="1090" y2="1229" stroke="#cbd5e1" stroke-width="2"/>
+<text x="70" y="1545" font-family="Arial" font-size="22" font-weight="700" fill="#64748b">V79 Junior AI Academy • Print or complete with your instructor</text>
+</svg>
