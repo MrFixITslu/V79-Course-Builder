@@ -514,6 +514,23 @@ function markdown(mission: MissionSeed, missionNumber: number, part: 1 | 2 | 3):
   ]).join('\n');
 }
 
+function lessonImages(missionNumber: number, lessonIndex: number): string[] {
+  const n = String(missionNumber).padStart(2, '0');
+  const images = [`/junior-ai/images/mission-${n}-cover.svg`];
+
+  if (lessonIndex === 0) {
+    if (missionNumber === 1) images.push('/junior-ai/images/character-pixel.svg', '/junior-ai/images/poster-creator-code.svg');
+    if (missionNumber === 2) images.push('/junior-ai/images/poster-magic.svg');
+    if (missionNumber === 3) images.push('/junior-ai/images/character-shield.svg', '/junior-ai/images/poster-stop.svg');
+    if (missionNumber === 4) images.push('/junior-ai/images/character-captain-verify.svg');
+    if (missionNumber === 5 || missionNumber === 14) images.push('/junior-ai/images/character-nova.svg');
+  }
+
+  if (lessonIndex === 1) images.push(`/junior-ai/images/mission-${n}-badge.svg`);
+  if (lessonIndex === 2) images.push(`/junior-ai/images/mission-${n}-badge.svg`, '/junior-ai/images/poster-calm.svg');
+  return images;
+}
+
 function makeQuestion(missionNumber: number, index: number, quizId: string, seed: QuizSeed) {
   return {
     id: `jai-q-${missionNumber}-${index + 1}`,
@@ -618,7 +635,7 @@ export function ensureJuniorAIAcademyCourse(db: any): boolean {
         lessonContent: markdown(mission, missionNumber, (lessonIndex + 1) as 1 | 2 | 3),
         videoUrl: lessonIndex === 0 ? `/junior-ai/media/mission-${String(missionNumber).padStart(2, '0')}-intro.mp4` : '',
         audioUrl: '',
-        imageUrls: [`/junior-ai/images/mission-${String(missionNumber).padStart(2, '0')}-cover.svg`],
+        imageUrls: lessonImages(missionNumber, lessonIndex),
         downloads: [],
         exercisePrompt: lessonIndex === 2 ? mission.deliverable : lessonIndex === 0 ? mission.explorerActivity + ' / ' + mission.creatorActivity : mission.create.join(' '),
         orderNumber: lessonIndex + 1
