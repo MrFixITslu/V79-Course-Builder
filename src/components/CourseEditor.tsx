@@ -384,18 +384,22 @@ export function CourseEditor({ course, onBack, onUpdateCourse, onExportCourse }:
                     value={formData.pricingType || 'free'}
                     onChange={(e) => {
                       const pricingType = e.target.value as Course['pricingType'];
-                      setFormData({ ...formData, pricingType, price: pricingType === 'premium' ? formData.price : 0 });
+                      const paid = pricingType === 'subscription' || pricingType === 'premium';
+                      setFormData({ ...formData, pricingType, price: paid ? (formData.price || 0) : 0 });
                     }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2.5 text-sm text-slate-800"
                   >
                     <option value="free">Free</option>
-                    {formData.pricingType === "free_trial" && <option value="free_trial">Legacy trial (membership required)</option>}
                     <option value="subscription">Subscription access</option>
-                      {formData.pricingType === "premium" && <option value="premium">Legacy premium (membership required)</option>}
+                    {formData.pricingType === "free_trial" && <option value="free_trial">Legacy trial (membership required)</option>}
+                    {formData.pricingType === "premium" && <option value="premium">Legacy premium (membership required)</option>}
                   </select>
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    You can change access and pricing before or after launch. Live course pricing is synchronized when this course is saved.
+                  </p>
                 </div>
 
-                {formData.pricingType === 'premium' && (
+                {(formData.pricingType === 'subscription' || formData.pricingType === 'premium') && (
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Price (USD)</label>
                     <input
@@ -406,6 +410,7 @@ export function CourseEditor({ course, onBack, onUpdateCourse, onExportCourse }:
                       onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2.5 text-sm text-slate-800"
                     />
+                    <p className="mt-1 text-[10px] text-slate-500">Set the current course access price. Use 0 only if you intentionally want zero-cost subscription-gated access.</p>
                   </div>
                 )}
 

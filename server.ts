@@ -787,32 +787,87 @@ app.put("/api/courses/:id", async (req, res) => {
   const originalCourse = db.courses[index];
   const targetStatus = req.body.status;
   const userRole = req.headers["x-user-role"] || req.body.userRole || "Admin";
+  const requestedPricingType = req.body.pricingType ?? originalCourse.pricingType ?? "free";
+  const requestedPrice = ["subscription", "premium"].includes(requestedPricingType)
+    ? Number(req.body.price ?? originalCourse.price ?? 0)
+    : 0;
+  const pricingChanged = requestedPricingType !== (originalCourse.pricingType || "free")
+    || requestedPrice !== Number(originalCourse.price || 0);
 
-  // Enforce role permission: Only Admin may publish
-  if (targetStatus && targetStatus === "Published") {
-    if (userRole !== "Admin") {
-      return res.status(403).json({ error: "Permissions Error: Only Admins can set status to Published." });
-    }
+  // Enforce role permission: Only Admin may publish or change live pricing.
+  if (targetStatus && targetStatus === "Published" && userRole !== "Admin") {
+    return res.status(403).json({ error: "Permissions Error: Only Admins can set status to Published." });
+  }
+  if (originalCourse.websiteAppId && pricingChanged && userRole !== "Admin") {
+    return res.status(403).json({ error: "Permissions Error: Only Admins can change pricing on a live course." });
   }
 
   if (originalCourse.websiteAppId && targetStatus && !['Published', 'Uploaded'].includes(targetStatus)) {
     try {
       const token = await getWebsiteAdminToken();
-      const remote = await fetch(`${WEBSITE_SYNC_URL}/api/apps/${originalCourse.websiteAppId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15000) });
+      const remote = await fetch(`${WEBSITE_SYNC_URL}/api/apps/${originalCourse.websiteAppId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(15000)
+      });
       if (!remote.ok && remote.status !== 404) throw new Error(`Website returned ${remote.status}`);
       originalCourse.websiteAppId = undefined;
-    } catch (e: any) { return res.status(502).json({ error: `Unpublishing failed. Course remains available: ${e.message}` }); }
+    } catch (e: any) {
+      return res.status(502).json({ error: `Unpublishing failed. Course remains available: ${e.message}` });
+    }
   }
-  db.courses[index] = {
+
+  const updatedCourse = {
     ...db.courses[index],
     ...req.body,
     id: originalCourse.id,
+    pricingType: requestedPricingType,
+    price: requestedPrice,
     websiteAppId: originalCourse.websiteAppId,
     updatedAt: new Date().toISOString()
   };
+
+  // If the course is already live and remains live, synchronize access/price
+  // before saving locally so the admin panel and public catalog cannot drift.
+  if (originalCourse.websiteAppId && pricingChanged && ['Published', 'Uploaded'].includes(targetStatus || originalCourse.status)) {
+    try {
+      const modules = db.modules.filter((m: any) => m.courseId === originalCourse.id);
+      const lessons = db.lessons.filter((l: any) => l.courseId === originalCourse.id);
+      const quizzes = db.quizzes.filter((q: any) => lessons.some((l: any) => l.id === q.lessonId));
+      const token = await getWebsiteAdminToken();
+      const payload = buildWebsitePayload(updatedCourse, modules, lessons, quizzes);
+      let remote = await fetch(`${WEBSITE_SYNC_URL}/api/apps/${originalCourse.websiteAppId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15000)
+      });
+
+      // If the remote listing was removed independently, recreate it using
+      // the complete course payload and keep the new website ID.
+      if (remote.status === 404) {
+        remote = await fetch(`${WEBSITE_SYNC_URL}/api/apps`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(15000)
+        });
+      }
+
+      const remoteData: any = await remote.json().catch(() => ({}));
+      if (!remote.ok) throw new Error(remoteData.error || `Website returned ${remote.status}`);
+      updatedCourse.websiteAppId = remoteData.id || originalCourse.websiteAppId;
+      updatedCourse.websitePublishedAt = new Date().toISOString();
+    } catch (e: any) {
+      return res.status(502).json({
+        error: `Pricing update was not saved because the live website could not be synchronized: ${e.message}`
+      });
+    }
+  }
+
+  db.courses[index] = updatedCourse;
   saveData(db);
 
-  // Log status change events
   if (targetStatus && originalCourse.status !== targetStatus) {
     PublishingLogRepository.create({
       courseId: originalCourse.id,
@@ -822,6 +877,18 @@ app.put("/api/courses/:id", async (req, res) => {
       toStatus: targetStatus,
       performedBy: userRole as any,
       details: `Status updated from ${originalCourse.status} to ${targetStatus}`
+    });
+  }
+
+  if (pricingChanged) {
+    PublishingLogRepository.create({
+      courseId: originalCourse.id,
+      courseTitle: originalCourse.title,
+      event: "Pricing Changed",
+      fromStatus: originalCourse.status,
+      toStatus: targetStatus || originalCourse.status,
+      performedBy: userRole as any,
+      details: `Access changed from ${originalCourse.pricingType || 'free'} (${Number(originalCourse.price || 0).toFixed(2)}) to ${requestedPricingType} (${requestedPrice.toFixed(2)}).${originalCourse.websiteAppId ? ' Live website pricing synchronized.' : ''}`
     });
   }
 

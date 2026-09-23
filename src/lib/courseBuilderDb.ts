@@ -3,6 +3,7 @@ import path from 'path';
 import { ensureDataEngineeringCourse } from '../data/dataEngineeringCourse';
 import { ensureIdeaToAdvantageCourse } from '../data/ideaToAdvantageCourse';
 import { ensureJuniorAIAcademyCourse } from '../data/juniorAIAcademyCourse';
+import { ensureJuniorNetworkingAcademyCourse } from '../data/juniorNetworkingAcademyCourse';
 import {
   ContentBlock,
   Media,
@@ -105,6 +106,11 @@ export function initAndMigrateDb(): StoreSchema {
   if (ensureJuniorAIAcademyCourse(db)) {
     migrated = true;
     console.log('[Seed] V79 Junior AI Academy added.');
+  }
+
+  if (ensureJuniorNetworkingAcademyCourse(db)) {
+    migrated = true;
+    console.log('[Seed] V79 Junior Networking Academy added.');
   }
 
   if (migrated || !fs.existsSync(DATA_FILE)) {

@@ -10,3 +10,6 @@ coverage/
 
 # Generated Junior Academy narrated videos/captions/transcripts
 /public/junior-ai/media/
+
+# Generated Junior Networking Academy media
+/public/junior-networking/media/

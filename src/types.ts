@@ -23,7 +23,7 @@ export interface Course {
   learningObjectives: string[];
   status: CourseStatus;
   pricingType: PricingType;
-  price: number; // only meaningful when pricingType is 'premium'
+  price: number; // meaningful for paid access types such as subscription or legacy premium
   createdAt: string;
   updatedAt: string;
   // Set only by a successful /api/courses/:id/publish call - never by
