@@ -50,6 +50,13 @@ setInterval(() => { for (const [key, entry] of attempts) if (entry.expires < Dat
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json({ limit: "2mb" }));
+
+// Lightweight unauthenticated health endpoint for container/orchestrator checks.
+// It intentionally returns no application data or secrets.
+app.get("/healthz", (_req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
 app.use("/api/learner/junior", juniorLearnerRouter);
 app.use("/api/learner", learnerRouter);
 

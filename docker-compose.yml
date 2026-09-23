@@ -48,6 +48,12 @@ services:
       # only inside the container's filesystem and are wiped on every
       # rebuild/restart - this mount makes both persist.
       - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3030/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
     depends_on:
       - postgres
     networks:

@@ -23,13 +23,15 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=3030
 
 COPY package*.json ./
 RUN npm install --omit=dev
 
 COPY --from=builder /app/dist ./dist
 
-EXPOSE 3000
+EXPOSE 3030
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD wget -q -O - http://127.0.0.1:3030/healthz >/dev/null || exit 1
 
 CMD ["node", "dist/server.cjs"]

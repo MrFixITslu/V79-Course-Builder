@@ -13,7 +13,8 @@ async function api(route,{method='GET',cookie='',body,status=200,headers={}}={})
   const data=await response.json();assert.equal(response.status,status,`${method} ${route}: ${JSON.stringify(data)}`);return {data,cookie:response.headers.get('set-cookie')?.split(';')[0]};
 }
 try {
-  for(let i=0;i<100;i++){try{await fetch(base+'/api/learner/session');break;}catch{await new Promise(r=>setTimeout(r,100));}}
+  for(let i=0;i<100;i++){try{await fetch(base+'/healthz');break;}catch{await new Promise(r=>setTimeout(r,100));}}
+  const health=await api('/healthz');assert.equal(health.data.status,'ok');
   const guest=await api('/api/learner/session');assert.equal(guest.data.user,null);
   const catalog=(await api('/api/public/courses')).data;assert.ok(catalog.length>=2);assert.ok(catalog.every(c=>!c.programme));
   await api('/api/courses',{status:401});
