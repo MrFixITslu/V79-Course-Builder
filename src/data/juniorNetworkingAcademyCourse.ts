@@ -399,42 +399,26 @@ const missions: MissionSeed[] = [
     ]
   },
   {
-    title: 'Network Operations Centre Challenge',
-    bigQuestion: 'Can you operate and troubleshoot a network under pressure?',
+    title: 'NOC Challenge & Network Engineer Demo Day',
+    bigQuestion: 'Can you troubleshoot under pressure, then explain and defend your final network design?',
     concepts: [
       'NOC teams prioritize incidents by impact and urgency.',
       'Good incident notes separate observations from guesses.',
-      'Communication matters during outages.',
       'Restoring service and finding root cause are related but different goals.',
-      'Post-incident review turns failures into improvements.'
-    ],
-    coreActivity: 'Work through a timed incident scenario using alerts, user reports, link status, IP information and logs to identify the likely fault.',
-    engineerChallenge: 'Create a short incident timeline, root-cause statement, corrective action and prevention recommendation.',
-    projectMilestone: 'Complete the final NOC challenge and prepare the final presentation/demo.',
-    safety: 'Stay calm, protect evidence and never hide mistakes during incident response.',
-    quiz: [
-      { question: 'What should determine incident priority?', options: ['Impact and urgency', 'Who shouts loudest', 'Cable colour'], correct: 'Impact and urgency', explanation: 'Priority should reflect how serious and time-sensitive the incident is.' },
-      { question: 'What is a root cause?', options: ['The underlying reason the incident occurred', 'The first person who noticed it', 'Any warning light'], correct: 'The underlying reason the incident occurred', explanation: 'Root-cause analysis looks beyond symptoms.' },
-      { question: 'Why run a post-incident review?', options: ['To improve systems and processes', 'To blame the youngest technician', 'To delete logs'], correct: 'To improve systems and processes', explanation: 'A review should identify lessons and preventive actions.' }
-    ]
-  },
-  {
-    title: 'Final Network Engineer Demo Day',
-    bigQuestion: 'Can you explain, defend and demonstrate your network design?',
-    concepts: [
+      'Post-incident review turns failures into improvements.',
       'A strong technical presentation connects requirements to design decisions.',
-      'Engineers should be able to explain tradeoffs, risks and test evidence.',
-      'Documentation is part of the product.',
+      'Engineers should explain tradeoffs, risks, test evidence and what they would improve.',
+      'Documentation is part of the finished network product.',
       'Career pathways include support, cabling, NOC, networking, systems, cybersecurity, cloud and data-centre roles.'
     ],
-    coreActivity: 'Present the physical diagram, logical diagram, rack/cabling plan, hardware list, IP/VLAN plan, Wi-Fi plan, security plan and test results.',
-    engineerChallenge: 'Answer change-request questions from the instructor: more users, failed switch, new building, guest isolation or Internet outage.',
-    projectMilestone: 'Submit the final portfolio and demonstrate the network or simulator to the class.',
-    safety: 'Give credit to teammates, protect sensitive configuration information and explain what was simulated versus physically built.',
+    coreActivity: 'Complete a timed NOC incident using alerts, user reports, link status, IP information and logs. Then present the physical diagram, logical diagram, rack/cabling plan, hardware list, IP/VLAN plan, Wi-Fi plan, security plan and test results.',
+    engineerChallenge: 'Create an incident timeline and root-cause statement, then answer instructor change requests such as more users, a failed switch, a new building, guest isolation or an Internet outage.',
+    projectMilestone: 'Submit the final network portfolio, complete the NOC challenge and demonstrate the network or simulator to the class.',
+    safety: 'Stay calm, protect evidence, never hide mistakes, give teammates credit and keep passwords or sensitive configuration details out of public portfolio material.',
     quiz: [
-      { question: 'What should a technical design presentation explain?', options: ['Why design choices meet requirements', 'Only the team name', 'Only device colours'], correct: 'Why design choices meet requirements', explanation: 'Design decisions should trace back to requirements and evidence.' },
-      { question: 'What belongs in the final portfolio?', options: ['Diagrams, plans, configurations/test evidence and reflection', 'Passwords', 'Private user data'], correct: 'Diagrams, plans, configurations/test evidence and reflection', explanation: 'A portfolio should show technical work without exposing secrets.' },
-      { question: 'Which is a networking career path?', options: ['NOC technician', 'Network engineer', 'Both NOC technician and network engineer'], correct: 'Both NOC technician and network engineer', explanation: 'Networking skills lead to many IT career pathways.' }
+      { question: 'What should determine incident priority?', options: ['Impact and urgency', 'Who shouts loudest', 'Cable colour'], correct: 'Impact and urgency', explanation: 'Priority should reflect how serious and time-sensitive the incident is.' },
+      { question: 'What should a technical design presentation explain?', options: ['Why design choices meet requirements', 'Only the team name', 'Only device colours'], correct: 'Why design choices meet requirements', explanation: 'Design decisions should trace back to requirements and test evidence.' },
+      { question: 'Why run a post-incident review?', options: ['To improve systems and prevent recurrence', 'To hide the root cause', 'To delete logs'], correct: 'To improve systems and prevent recurrence', explanation: 'Post-incident review turns failures into improvements.' }
     ]
   }
 ];
