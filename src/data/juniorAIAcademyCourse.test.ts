@@ -48,7 +48,9 @@ for (let mission = 1; mission <= 16; mission++) {
   const intro = missionLessons[0];
   const n = String(mission).padStart(2, '0');
   assert.equal(intro.videoUrl, `/junior-ai/media/mission-${n}-intro.mp4`);
-  assert.deepEqual(intro.imageUrls, [`/junior-ai/images/mission-${n}-cover.svg`]);
+  assert.ok(intro.imageUrls.includes(`/junior-ai/images/mission-${n}-cover.svg`), `mission ${mission} cover missing`);
+  assert.ok(missionLessons[1].imageUrls.includes(`/junior-ai/images/mission-${n}-badge.svg`), `mission ${mission} badge missing from create lesson`);
+  assert.ok(missionLessons[2].imageUrls.includes('/junior-ai/images/poster-calm.svg'), `mission ${mission} CALM visual missing from studio lesson`);
   const studio = missionLessons[2];
   assert.match(studio.lessonContent, /Studio Team Mission/);
   assert.match(studio.lessonContent, /CALM/);
