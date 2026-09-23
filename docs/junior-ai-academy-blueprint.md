@@ -21,6 +21,12 @@ By the end of the core program, learners should be able to:
 - Build and present a small project or supervised mini-business concept.
 - Explain what the AI contributed and what the human creator contributed.
 - Build a personal AI portfolio of completed work.
+- Work effectively in a team of three with clear roles and shared responsibility.
+- Take turns leading a team and reporting progress.
+- Use age-appropriate planning, task ownership, milestones, deadlines and risk management.
+- Handle normal disagreements using the CALM conflict-resolution method and know when to ask an adult for help.
+- Submit weekly team work for instructor grading/review, respond to feedback and revise.
+- Build one team project from Week 1 into a finished product for the final showcase.
 - Identify careers and entrepreneurial paths where these skills can be useful.
 
 ## 2. Two age paths inside one course
@@ -98,8 +104,8 @@ Each weekly mission is designed for approximately 75–90 minutes of instructor-
 3. **Create Together — 10–15 min**  
    Instructor and learners complete a small example.
 
-4. **Creator Mission — 25–35 min**  
-   Learners build something individually or in pairs.
+4. **Studio Team Mission — 25–35 min**  
+   Learners work in teams of three. Each team has an accountable leader plus Builder and Checker responsibilities. The weekly task also advances the team's long-running final project.
 
 5. **Check & Ethics Challenge — 5–10 min**  
    Accuracy, safety, fairness, privacy or honesty question.
@@ -109,6 +115,38 @@ Each weekly mission is designed for approximately 75–90 minutes of instructor-
 
 7. **Badge / Knowledge Check — 5 min**  
    Short quiz, reflection or challenge.
+
+8. **Weekly Studio Check-In**  
+   Each team submits its weekly deliverable, leader report, task-board update, risk/problem check and individual contribution reflections for instructor review. Teams may receive **Needs Changes** and revise before approval.
+
+## Teamwork, leadership, project management and conflict resolution
+
+Learners work in **AI Studio Teams of three** throughout the program. The long-running team project begins in Week 1 and grows every week until the Week 16 showcase.
+
+There is one Team Leader at a time. Leadership rotates by project phase so each learner experiences accountability and handover. Teams also use Creator/Builder and Checker/Researcher responsibilities.
+
+Project management is deliberately simple:
+- Goal.
+- Milestones.
+- To Do / Doing / Done.
+- Task owner.
+- Deadline.
+- Risk.
+- Backup plan.
+
+For ages 6–8, risk management is introduced as the **Uh-Oh Plan**: “What could go wrong? How can we stop it? Who can help us?”
+
+For ages 9–12, teams use simple Low / Medium / High risk cards with prevention and backup actions.
+
+Normal disagreements use the **CALM Team Method**:
+- **C — Cool down**
+- **A — Ask & listen**
+- **L — Look for fair choices**
+- **M — Make an agreement**
+
+Bullying, threats, harassment, repeated exclusion, unsafe behavior, discrimination or privacy problems go directly to an instructor rather than being handled only by the team.
+
+See `docs/junior-ai-academy-team-project-model.md` for the full team, weekly review, grading and final-project model.
 
 ## 8. Three-level curriculum
 
@@ -128,10 +166,15 @@ Activities:
 - AI-or-not guessing game.
 - Sort examples into “AI may be involved” and “mostly human rules/tools.”
 - Give Pixel a simple instruction and compare different results.
+- Form AI Studio Teams of three.
+- Choose a team name and create the Team Charter.
+- Choose the first Team Leader.
+- Brainstorm the team's long-running final project idea.
 - Draw “an AI helper I wish existed.”
 
 Deliverable:
 - My AI Explorer passport/profile.
+- Team Charter + first project idea + first Weekly Studio Check-In.
 
 Badge:
 - **AI Explorer**
@@ -403,8 +446,10 @@ Deliverable:
 Badge:
 - **Young Entrepreneur**
 
-## Mission 15 — Build & Promote Your Big AI Project
-**Big question:** Can you combine everything you have learned?
+## Mission 15 — Final Production Sprint
+**Big question:** Can your team bring sixteen weeks of work together into one finished product?
+
+This is not the beginning of the project. Teams have been building the project since Week 1.
 
 Learners choose a project such as:
 - Help visitors learn about Saint Lucia.
@@ -428,7 +473,10 @@ Required steps:
 9. Explain what AI did and what the learner did.
 
 Deliverable:
-- Multi-format capstone.
+- Final multi-format team product.
+- Completed task board and risk review.
+- Individual contribution reflection.
+- Instructor review submission.
 
 Badge:
 - **AI Builder**
@@ -443,12 +491,14 @@ Micro-lessons:
 
 Activities:
 - Portfolio setup.
-- Practice a short pitch.
+- Practice a short team pitch.
+- Explain roles, one project risk and one challenge/disagreement the team successfully handled.
 - Parent/student demo day.
 - Peer celebration.
+- Individual reflection on contribution, leadership and teamwork.
 
 Deliverable:
-- V79 AI Portfolio + final presentation.
+- V79 AI Portfolio + final team product + final presentation + individual reflection.
 
 Badge:
 - **V79 AI Creator**
@@ -478,7 +528,13 @@ Do not make the course feel exam-heavy.
 Use:
 - Tiny knowledge checks.
 - Show-me challenges.
+- Weekly team submissions.
+- Instructor grading/review and resubmission.
 - Project rubrics.
+- Individual contribution reflections.
+- Team Leader status reports.
+- Collaboration and responsibility observations.
+- Risk/problem check-ins.
 - Reflection questions.
 - Peer explanation.
 - Instructor observation.
@@ -486,8 +542,12 @@ Use:
 
 Recommended completion standard:
 - Complete the required core missions.
-- Submit major creator projects.
-- Complete final capstone.
+- Participate in an AI Studio Team of three where possible.
+- Complete required individual reflections.
+- Submit required Weekly Studio Check-Ins.
+- Respond to required instructor revisions.
+- Complete the team's final product.
+- Demonstrate individual contribution.
 - Present at the final showcase.
 
 ## 11. Media approach
@@ -585,9 +645,25 @@ Recommended V79 mapping:
 - **Lessons:** 2–3 micro-lessons per mission.
 - **Exercise prompt:** Creator Mission.
 - **Quiz:** Badge/knowledge check.
-- **Assignment:** Major artifact/portfolio submission.
+- **Assignment:** Weekly Studio Check-In plus artifact/portfolio submission.
 - **Images/video/audio:** Lesson media assets.
 - **Pricing type:** Subscription.
+
+Junior Academy requires additional platform work beyond the current individual assignment storage:
+- Teams of three.
+- Team membership and role history.
+- Current Team Leader.
+- Long-running team project.
+- Weekly team submissions.
+- Instructor review/grading states.
+- Rubric feedback.
+- Resubmission workflow.
+- Individual contribution reflections.
+- Team task board.
+- Risk log.
+- Optional conflict-resolution reflection.
+
+The detailed proposed data/workflow model is in `docs/junior-ai-academy-team-project-model.md`.
 
 ## 15. Production order
 
