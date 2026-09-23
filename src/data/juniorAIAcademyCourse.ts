@@ -531,6 +531,28 @@ function lessonImages(missionNumber: number, lessonIndex: number): string[] {
   return images;
 }
 
+function lessonDownloads(missionNumber: number, lessonIndex: number) {
+  const resources: Array<{ name: string; url: string; size: string; type: string }> = [];
+  const add = (name: string, file: string) => resources.push({
+    name,
+    url: `/junior-ai/resources/${file}`,
+    size: 'Printable',
+    type: 'SVG worksheet'
+  });
+
+  if (missionNumber === 2 && lessonIndex === 1) add('MAGIC Prompt Workbench', 'magic-prompt-workbench.svg');
+  if (missionNumber === 3 && lessonIndex === 0) add('STOP Safety Check', 'stop-safety-check.svg');
+
+  if (lessonIndex === 2) {
+    if (missionNumber === 1) add('AI Studio Team Charter', 'team-charter.svg');
+    add('Weekly Studio Check-In', 'weekly-studio-check-in.svg');
+    add('Risk / Uh-Oh Plan', 'risk-uh-oh-plan.svg');
+    add('CALM Fix-It Card', 'calm-fix-it-card.svg');
+    if (missionNumber === 16) add('Demo Day Reflection', 'demo-day-reflection.svg');
+  }
+  return resources;
+}
+
 function makeQuestion(missionNumber: number, index: number, quizId: string, seed: QuizSeed) {
   return {
     id: `jai-q-${missionNumber}-${index + 1}`,
@@ -636,7 +658,7 @@ export function ensureJuniorAIAcademyCourse(db: any): boolean {
         videoUrl: lessonIndex === 0 ? `/junior-ai/media/mission-${String(missionNumber).padStart(2, '0')}-intro.mp4` : '',
         audioUrl: '',
         imageUrls: lessonImages(missionNumber, lessonIndex),
-        downloads: [],
+        downloads: lessonDownloads(missionNumber, lessonIndex),
         exercisePrompt: lessonIndex === 2 ? mission.deliverable : lessonIndex === 0 ? mission.explorerActivity + ' / ' + mission.creatorActivity : mission.create.join(' '),
         orderNumber: lessonIndex + 1
       });
