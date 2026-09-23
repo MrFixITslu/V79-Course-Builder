@@ -17,8 +17,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "public" / "junior-ai" / "media"
-FONT = "/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf"
-FONT_BOLD = "/usr/share/fonts/ttf-dejavu/DejaVuSans-Bold.ttf"
+def find_font(filename: str) -> str:
+    candidates = [
+        Path("/usr/share/fonts/TTF") / filename,
+        Path("/usr/share/fonts/ttf-dejavu") / filename,
+        Path("/usr/share/fonts/truetype/dejavu") / filename,
+        Path("/usr/share/fonts/dejavu") / filename,
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    for candidate in Path("/usr/share/fonts").rglob(filename):
+        return str(candidate)
+    raise SystemExit(f"Could not find required font: {filename}")
+
+FONT = find_font("DejaVuSans.ttf")
+FONT_BOLD = find_font("DejaVuSans-Bold.ttf")
 
 MISSIONS = [
     ("Welcome to the World of AI", "AI can be helpful, creative, and wrong.", "Meet your team and decide how humans and AI should work together."),
@@ -135,8 +149,6 @@ def generate_mission(index: int, title: str, key: str, challenge: str) -> None:
 if __name__ == "__main__":
     require("ffmpeg")
     require("espeak")
-    if not Path(FONT).exists() or not Path(FONT_BOLD).exists():
-        raise SystemExit("DejaVu Sans fonts were not found.")
     for i,(title,key,challenge) in enumerate(MISSIONS,1):
         generate_mission(i,title,key,challenge)
     print(f"Generated {len(MISSIONS)} Junior AI Academy videos in {OUT}")
