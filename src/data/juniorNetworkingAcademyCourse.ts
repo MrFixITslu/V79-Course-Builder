@@ -536,10 +536,14 @@ function lessonDownloads(missionNumber: number, lessonIndex: number) {
 
 function missionImages(missionNumber: number, lessonIndex: number) {
   const n = String(missionNumber).padStart(2, '0');
-  return [
-    `/junior-networking/images/mission-${n}-cover.svg`,
-    `/junior-networking/images/mission-${n}-diagram.svg`
-  ].slice(0, lessonIndex === 0 ? 2 : 1);
+  const images = [`/junior-networking/images/mission-${n}-cover.svg`];
+  if (lessonIndex === 0) {
+    images.push(`/junior-networking/images/mission-${n}-diagram.svg`);
+    if (missionNumber === 2) images.push('/junior-networking/images/hardware-glossary.svg');
+    if (missionNumber === 6) images.push('/junior-networking/images/osi-model-poster.svg');
+    if (missionNumber === 17) images.push('/junior-networking/images/troubleshooting-ladder.svg');
+  }
+  return images;
 }
 
 export function ensureJuniorNetworkingAcademyCourse(db: any): boolean {
