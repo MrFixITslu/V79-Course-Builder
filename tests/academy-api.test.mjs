@@ -49,6 +49,12 @@ try {
   const certificate=(await api(`/api/learner/certificate/${programme.id}`,{method:'POST',cookie:learner})).data;
   assert.equal(certificate.name,'Test Learner'); assert.ok(certificate.id.startsWith('V79-'));
   const premium=(await api('/api/courses',{method:'POST',cookie:admin,status:201,body:{title:'Subscription test',status:'Published',pricingType:'subscription',category:'Test Application'}})).data;
+  const pricedPublished=(await api(`/api/courses/${premium.id}`,{method:'PUT',cookie:admin,body:{pricingType:'subscription',price:24.5,status:'Published'}})).data;
+  assert.equal(pricedPublished.pricingType,'subscription');assert.equal(pricedPublished.price,24.5);
+  const freePublished=(await api(`/api/courses/${premium.id}`,{method:'PUT',cookie:admin,body:{pricingType:'free',price:999,status:'Published'}})).data;
+  assert.equal(freePublished.pricingType,'free');assert.equal(freePublished.price,0);
+  const repricedPublished=(await api(`/api/courses/${premium.id}`,{method:'PUT',cookie:admin,body:{pricingType:'subscription',price:49.99,status:'Published'}})).data;
+  assert.equal(repricedPublished.pricingType,'subscription');assert.equal(repricedPublished.price,49.99);
   const mod=(await api(`/api/courses/${premium.id}/modules`,{method:'POST',cookie:admin,status:201,body:{title:'Module'}})).data;
   const lesson=(await api(`/api/modules/${mod.id}/lessons`,{method:'POST',cookie:admin,status:201,body:{title:'Welcome',lessonContent:'PROTECTED_CONTENT'}})).data;
   const locked=(await api(`/api/public/modules/${mod.id}/lessons`)).data;
