@@ -131,6 +131,7 @@ export function Sidebar({ courses, currentView, setCurrentView, selectedAppCateg
         )}
 
         <button onClick={() => setCurrentView('learners')} className={`w-full text-left px-3 py-3 rounded-xl text-sm font-semibold ${currentView === 'learners' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800'}`}>Learners & memberships</button>
+        {canEdit && <button onClick={() => setCurrentView('junior-academy')} className={`w-full text-left px-3 py-3 rounded-xl text-sm font-semibold ${currentView === 'junior-academy' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800'}`}>Junior Academy Teams</button>}
         {/* Assets & Deployments */}
         {canEdit && (
           <div className="space-y-1">

@@ -1,4 +1,5 @@
 import { LearnerManagement } from './components/LearnerManagement';
+import { JuniorAcademyManagement } from './components/JuniorAcademyManagement';
 import React, { useState, useEffect } from 'react';
 import { Course, Module, Lesson } from './types';
 import { Sidebar } from './components/Sidebar';
@@ -622,6 +623,7 @@ export default function AdminApp() {
           )}
 
           {currentView === 'learners' && <LearnerManagement />}
+          {currentView === 'junior-academy' && <JuniorAcademyManagement />}
           {currentView === 'settings' && (
             <div className="p-8 space-y-6 max-w-4xl mx-auto">
               <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-xs flex items-center justify-between">

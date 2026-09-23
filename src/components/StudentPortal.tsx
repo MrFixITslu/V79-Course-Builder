@@ -36,6 +36,7 @@ import { Course, Module, Lesson, Quiz } from '../types';
 import { ContentBlock, Assignment, Download as DownloadType } from '../types/course-builder-v2';
 import { ProgrammeStatus } from '../types/programme';
 import { BusinessAdvantageProgramme } from './BusinessAdvantageProgramme';
+import { JuniorTeamStudio } from './JuniorTeamStudio';
 import { buildProgrammeStatus, normalizeProgrammeState } from '../lib/programmeScoring';
 
 interface StudentPortalProps {
@@ -1146,6 +1147,27 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
               )}
             </div>
 
+            {Array.isArray(currentLesson.imageUrls) && currentLesson.imageUrls.length > 0 && (
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                <p className="text-[11px] font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                  Mission Visuals
+                </p>
+                <div className={`grid gap-3 ${currentLesson.imageUrls.length > 1 ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
+                  {currentLesson.imageUrls.map((url, index) => (
+                    <figure key={url + index} className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                      <img
+                        src={url}
+                        alt={`${currentLesson.title} learning visual ${index + 1}`}
+                        loading="lazy"
+                        className="w-full h-auto object-contain"
+                      />
+                    </figure>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* 2. Audio/Video Block */}
             {(currentLesson.videoUrl || currentLesson.audioUrl) && (
               <div className="space-y-3 bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
@@ -1161,7 +1183,17 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                         controls
                         className="w-full h-full object-contain"
                         referrerPolicy="no-referrer"
-                      />
+                      >
+                        {currentLesson.videoUrl.endsWith('.mp4') && (
+                          <track
+                            kind="captions"
+                            srcLang="en"
+                            label="English"
+                            src={currentLesson.videoUrl.replace(/\.mp4$/, '.vtt')}
+                            default
+                          />
+                        )}
+                      </video>
                     </div>
                   </div>
                 )}
@@ -1190,6 +1222,10 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
               <div className="bg-white border border-slate-200 p-8 rounded-2xl shadow-2xs">
                 {renderMarkdown(currentLesson.lessonContent)}
               </div>
+            )}
+
+            {course.id === 'course-junior-ai-academy-01' && currentLesson && currentLesson.orderNumber === (lessonsMap[currentLesson.moduleId]?.length || 0) && (
+              <JuniorTeamStudio courseId={course.id} missionNumber={currentModuleIndex + 1} learnerId={learnerId} />
             )}
 
             {/* 4. Lesson Content Blocks (Visual Blocks) */}
@@ -1423,7 +1459,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
             )}
 
             {/* 7. Assignments */}
-            {assignments.filter(a => a.lessonId === currentLesson.id).map((assign) => {
+            {course.id !== 'course-junior-ai-academy-01' && assignments.filter(a => a.lessonId === currentLesson.id).map((assign) => {
               const submission = assignmentSubmissions[assign.id];
               return (
                 <div key={assign.id} className="bg-white border border-slate-200 p-8 rounded-2xl space-y-5 shadow-2xs">

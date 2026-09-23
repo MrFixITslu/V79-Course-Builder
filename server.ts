@@ -24,6 +24,7 @@ import {
 } from "./src/lib/courseBuilderDb";
 
 import { learner, learnerRouter, learnerAdminRouter } from './src/lib/learnerAccounts';
+import { juniorLearnerRouter, juniorAdminRouter } from './src/lib/juniorAcademyTeams';
 import { canReadCourse, courseSummary, lessonSummary, deleteCourseRecords } from './src/lib/academyAccess';
 const app = express();
 app.disable('x-powered-by');
@@ -49,6 +50,7 @@ setInterval(() => { for (const [key, entry] of attempts) if (entry.expires < Dat
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json({ limit: "2mb" }));
+app.use("/api/learner/junior", juniorLearnerRouter);
 app.use("/api/learner", learnerRouter);
 
 // Data storage file path
@@ -497,6 +499,7 @@ app.use("/api", (req, res, next) => {
 });
 
 app.use("/api/learners", learnerAdminRouter);
+app.use("/api/junior-admin", juniorAdminRouter);
 
 const initialData = {
   courses: [
@@ -1272,7 +1275,9 @@ function buildWebsitePayload(course: any, modules: any[], lessons: any[], quizze
     category: "courses",
     pricingType: course.pricingType || "free",
     price: ["premium", "subscription"].includes(course.pricingType) ? Number(course.price) || 0 : 0,
-    logoUrl: course.thumbnail || "lucide:GraduationCap",
+    logoUrl: course.thumbnail?.startsWith("/")
+      ? `${(process.env.ACADEMY_PUBLIC_URL || "").replace(/\/$/, "")}${course.thumbnail}`
+      : course.thumbnail || "lucide:GraduationCap",
     accessUrl: `${(process.env.ACADEMY_PUBLIC_URL || "").replace(/\/$/, "")}/course/${course.id}`,
     instructor: course.instructor || "",
     duration: course.estimatedDuration || "",
@@ -1314,6 +1319,7 @@ function validateCourseForPublishing(course: any, modules: any[], lessons: any[]
 
   const isValidUrl = (str: string) => {
     if (!str || str.trim() === "") return true; // optional fields are fine if empty
+    if (str.startsWith("/")) return true; // same-origin Academy asset
     try {
       const url = new URL(str);
       return url.protocol === "http:" || url.protocol === "https:";

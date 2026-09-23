@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { ensureDataEngineeringCourse } from '../data/dataEngineeringCourse';
 import { ensureIdeaToAdvantageCourse } from '../data/ideaToAdvantageCourse';
+import { ensureJuniorAIAcademyCourse } from '../data/juniorAIAcademyCourse';
 import {
   ContentBlock,
   Media,
@@ -99,6 +100,11 @@ export function initAndMigrateDb(): StoreSchema {
   if (ensureIdeaToAdvantageCourse(db)) {
     migrated = true;
     console.log('[Seed] From Idea to Advantage Caribbean business programme added.');
+  }
+
+  if (ensureJuniorAIAcademyCourse(db)) {
+    migrated = true;
+    console.log('[Seed] V79 Junior AI Academy added.');
   }
 
   if (migrated || !fs.existsSync(DATA_FILE)) {

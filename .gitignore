@@ -7,3 +7,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Generated Junior Academy narrated videos/captions/transcripts
+/public/junior-ai/media/

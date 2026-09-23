@@ -14,6 +14,47 @@ The **V79 Academy Course Builder** is an enterprise-grade internal course author
 - **Automated Export System**: Package courses into structured JSON directories (`course.json`, `modules/`, `quizzes/`, `README.md`) ready for Academy publishing.
 - **AI Course Assistant**: Powered by Gemini to auto-generate course outlines, lesson descriptions, and quiz questions.
 
+### V79 Junior AI Academy
+
+The repository includes a team-based, subscription-ready AI programme for children ages 6–12 at:
+
+```text
+/course/course-junior-ai-academy-01
+```
+
+The Junior Academy contains 16 weekly missions across **AI Explorer**, **AI Creator**, and **AI Builder**. It deliberately excludes the later advanced app-development/deployment course.
+
+Key programme features:
+
+- Two age paths inside the same missions: **AI Explorers (6–8)** and **AI Creators (9–12)**.
+- Transferable AI skills: prompting, verification, privacy, ethics, images, writing, audio, video, presentations, promotion, workflows, problem solving and supervised entrepreneurship.
+- **AI Studio Teams of exactly three** with Leader, Builder and Checker responsibilities.
+- Leadership rotation so every learner practices accountability and handover.
+- A long-running team project that begins in Mission 1 and becomes the final Demo Day product.
+- Age-appropriate project management: goals, milestones, owners, deadlines, **To Do → Doing → Done**, risks and backup plans.
+- Younger learners use an **Uh-Oh Plan**; older learners use simple Low/Medium/High risk cards.
+- The **CALM** conflict method: Cool down → Ask & listen → Look for fair choices → Make an agreement, with immediate adult escalation for unsafe or serious behavior.
+- Weekly Studio Check-Ins with individual contribution reflections and instructor review states: **Submitted → Needs Changes → Approved**.
+- Certificate eligibility requires all lessons, all 16 approved weekly team submissions and the individual learner’s reflection for each mission.
+- A complete visual pack with 16 mission covers, 16 badges, character cards and Creator Code/MAGIC/STOP/CALM posters.
+- Sixteen captioned narrated mission-intro videos generated reproducibly during the production Docker build.
+
+Instructor curriculum documentation lives in:
+
+```text
+docs/junior-ai-academy-blueprint.md
+docs/junior-ai-academy-mission-01.md
+docs/junior-ai-academy-missions-02-16.md
+docs/junior-ai-academy-team-project-model.md
+docs/junior-ai-academy-instructor-guardian-guide.md
+```
+
+Printable learner worksheets are stored in:
+
+```text
+public/junior-ai/resources/
+```
+
 ### From Idea to Advantage programme
 
 The repository includes a published, editable Caribbean small-business programme at:

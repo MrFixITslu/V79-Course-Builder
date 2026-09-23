@@ -10,6 +10,24 @@ const file = path.join(process.cwd(), 'data', 'learners.json');
 const sessions = new Map<string, { id: string; expires: number }>();
 function read(): any[] { return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : []; }
 function write(users: any[]) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file + '.tmp', JSON.stringify(users), { mode: 0o600 }); fs.renameSync(file + '.tmp', file); }
+const juniorFile = path.join(process.cwd(), 'data', 'junior-academy.json');
+function juniorTeamWorkComplete(userId: string, courseId: string): boolean {
+  if (!fs.existsSync(juniorFile)) return false;
+  try {
+    const store = JSON.parse(fs.readFileSync(juniorFile, 'utf8'));
+    const team = (store.teams || []).find((t: any) => t.courseId === courseId && (t.memberIds || []).includes(userId));
+    if (!team) return false;
+    for (let mission = 1; mission <= 16; mission++) {
+      const submission = (store.submissions || []).find((x: any) => x.teamId === team.id && x.missionNumber === mission);
+      if (!submission || submission.status !== 'Approved') return false;
+      const reflection = submission.individualReflections?.[userId];
+      if (!reflection || !String(reflection.helped || '').trim() || !String(reflection.learned || '').trim() || !String(reflection.next || '').trim()) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
 const digest = (password: string, salt: string) => crypto.scryptSync(password, salt, 64).toString('hex');
 export function learner(req: express.Request) {
   const token = /(?:^|;\s*)academy_session=([^;]+)/.exec(req.headers.cookie || '')?.[1];
@@ -89,7 +107,8 @@ learnerRouter.post('/certificate/:courseId', (req, res) => {
   const progress = user.progress?.[course.id] || {};
   const lessons = db.lessons.filter(l => l.courseId === course.id);
   const assignments = db.assignments.filter((a: any) => a.courseId === course.id && a.required !== false);
-  if (!lessons.length || lessons.some(l => !progress.completedLessons?.[l.id]) || assignments.some(a => !progress.assignmentSubmissions?.[a.id]?.text?.trim()) || (course.programme && !(progress.programmeState?.examAttempts || []).some((a: any) => a.passed))) return res.status(409).json({ error: 'Complete the required lessons, assignments and assessment before requesting a certificate.' });
+  const juniorComplete = course.id !== 'course-junior-ai-academy-01' || juniorTeamWorkComplete(user.id, course.id);
+  if (!lessons.length || lessons.some(l => !progress.completedLessons?.[l.id]) || assignments.some(a => !progress.assignmentSubmissions?.[a.id]?.text?.trim()) || (course.programme && !(progress.programmeState?.examAttempts || []).some((a: any) => a.passed)) || !juniorComplete) return res.status(409).json({ error: course.id === 'course-junior-ai-academy-01' ? 'Complete all lessons, earn approval on all 16 Weekly Studio Check-Ins, and save your individual reflections before requesting a certificate.' : 'Complete the required lessons, assignments and assessment before requesting a certificate.' });
   progress.certificate ||= { id: progress.programmeState?.certificateId || `V79-${crypto.randomUUID()}`, name: user.name, issuedAt: new Date().toISOString(), courseTitle: course.title };
   write(users); res.json(progress.certificate);
 });
