@@ -217,6 +217,33 @@ Instructor:
 Students:
 > “WE ARE!”
 
+## AI Studio Team Launch
+
+Form teams of three.
+
+Each team:
+1. Chooses a team name.
+2. Chooses the first Team Leader.
+3. Assigns Builder and Checker responsibilities.
+4. Creates a Team Charter.
+5. Learns the CALM conflict method.
+6. Brainstorms one long-running project to develop across the course.
+
+### CALM
+- **Cool down**
+- **Ask & listen**
+- **Look for fair choices**
+- **Make an agreement**
+
+The team also creates its first simple board:
+
+**To Do → Doing → Done**
+
+And its first **Uh-Oh Plan**:
+- What could go wrong?
+- How can we stop it?
+- Who can help us?
+
 ## Creator Mission
 
 ### My AI Helper
@@ -279,7 +306,32 @@ Learner earns the **AI Explorer** badge after they can demonstrate:
 
 ## Mission 1 portfolio item
 
-**My AI Helper** profile.
+**Individual:** My AI Helper profile.
+
+**Team submission:** Team Charter + project idea + first task board + first Uh-Oh/Risk check + Team Leader Report.
+
+### Team Leader Report
+- What did we plan?
+- What did we finish?
+- What do we need help with?
+
+### Individual contribution reflection
+Each learner answers:
+- What did I help with?
+- What did I learn?
+- What will I do next week?
+
+### Instructor review
+Status:
+- Submitted
+- Under Review
+- Needs Changes
+- Approved
+
+Feedback:
+- ⭐ Strong
+- 🔧 Improve
+- 🚀 Next
 
 ## Instructor reflection
 
