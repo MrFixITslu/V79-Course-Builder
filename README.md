@@ -14,6 +14,53 @@ The **V79 Academy Course Builder** is an enterprise-grade internal course author
 - **Automated Export System**: Package courses into structured JSON directories (`course.json`, `modules/`, `quizzes/`, `README.md`) ready for Academy publishing.
 - **AI Course Assistant**: Powered by Gemini to auto-generate course outlines, lesson descriptions, and quiz questions.
 
+### V79 Junior Networking Academy
+
+The repository also includes a separate networking programme for learners ages **12–17**:
+
+```text
+/course/course-junior-networking-academy-01
+```
+
+The networking course is intentionally separate from the Junior AI Academy and contains:
+
+- **20 missions / 60 lessons**;
+- Core Path activities for ages 12–14;
+- Engineer Challenge extensions for ages 15–17;
+- networking hardware, racks, UPS systems, structured cabling, copper, fiber and PoE;
+- OSI and TCP/IP models;
+- Ethernet, MAC addressing, IPv4, subnetting and CIDR;
+- DHCP, DNS, ARP and ICMP;
+- routing, VLANs, trunks and inter-VLAN routing;
+- Wi-Fi planning across 2.4/5/6 GHz concepts;
+- servers, storage, virtualization and cloud networking;
+- firewalls, NAT, VPNs and defensive network security;
+- monitoring, logging and network operations;
+- structured troubleshooting;
+- network design, documentation and a final build/simulation capstone;
+- **20 browser-based interactive network labs**;
+- 20 mission covers and 20 concept diagrams;
+- hardware, OSI and troubleshooting teaching posters;
+- printable hardware, rack, cabling, IP/VLAN, wireless/security, troubleshooting and final-design worksheets;
+- 20 captioned narrated mission videos generated during the production Docker build.
+
+Instructor/curriculum guidance:
+
+```text
+docs/junior-networking-academy-blueprint.md
+```
+
+### Course pricing controls
+
+Administrators can set courses to **Free** or **Subscription** and set a USD course price.
+
+- Pricing may be configured before launch.
+- Pricing may be changed after launch.
+- Free access always normalizes the stored price to `0`.
+- Subscription access preserves the administrator's chosen price.
+- When a course already has a live website listing, saving a pricing/access change synchronizes the existing website entry before the local change is committed.
+- Pricing changes are added to the publishing audit log.
+
 ### V79 Junior AI Academy
 
 The repository includes a team-based, subscription-ready AI programme for children ages 6–12 at:
