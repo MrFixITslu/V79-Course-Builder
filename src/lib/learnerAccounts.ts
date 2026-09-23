@@ -5,12 +5,17 @@ import path from 'node:path';
 import { scoreFinalExam } from './programmeScoring';
 import { loadDb } from './courseBuilderDb';
 import { canReadCourse, hasMembership } from './academyAccess';
+import { queueAcademyEvent } from './platformEvents';
 
 const file = path.join(process.cwd(), 'data', 'learners.json');
 const sessions = new Map<string, { id: string; expires: number }>();
 function read(): any[] { return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : []; }
 function write(users: any[]) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file + '.tmp', JSON.stringify(users), { mode: 0o600 }); fs.renameSync(file + '.tmp', file); }
 const juniorFile = path.join(process.cwd(), 'data', 'junior-academy.json');
+function safeQueueAcademyEvent(event: Parameters<typeof queueAcademyEvent>[0]) {
+  try { return queueAcademyEvent(event); }
+  catch (error: any) { console.warn('[V79 Hub Events] Could not queue Academy event:', error?.message || error); return null; }
+}
 function juniorTeamWorkComplete(userId: string, courseId: string): boolean {
   if (!fs.existsSync(juniorFile)) return false;
   try {
@@ -72,7 +77,19 @@ learnerRouter.post('/enroll/:courseId', (req, res) => {
   const course = loadDb().courses.find(c => c.id === req.params.courseId && ['Published', 'Uploaded'].includes(c.status));
   if (!course) return res.status(404).json({ error: 'Course is no longer available.' });
   if (!canReadCourse(course, user)) return res.status(403).json({ error: 'An active academy subscription is required. Online subscriptions are coming soon.', code: 'SUBSCRIPTION_REQUIRED' });
-  user.enrolledCourseIds = [...new Set([...(user.enrolledCourseIds || []), course.id])]; write(users); res.json({ user: publicUser(user) });
+  const alreadyEnrolled = (user.enrolledCourseIds || []).includes(course.id);
+  user.enrolledCourseIds = [...new Set([...(user.enrolledCourseIds || []), course.id])];
+  write(users);
+  if (!alreadyEnrolled) {
+    safeQueueAcademyEvent({
+      type: 'course.enrolled',
+      occurredAt: new Date().toISOString(),
+      organizationRef: user.id,
+      subjectId: user.id,
+      payload: { courseId: course.id, courseTitle: course.title }
+    });
+  }
+  res.json({ user: publicUser(user) });
 });
 learnerRouter.get('/progress/:courseId', (req, res) => { res.json(learner(req).progress?.[req.params.courseId] || {}); });
 learnerRouter.put('/progress/:courseId', (req, res) => {
@@ -109,8 +126,20 @@ learnerRouter.post('/certificate/:courseId', (req, res) => {
   const assignments = db.assignments.filter((a: any) => a.courseId === course.id && a.required !== false);
   const juniorComplete = course.id !== 'course-junior-ai-academy-01' || juniorTeamWorkComplete(user.id, course.id);
   if (!lessons.length || lessons.some(l => !progress.completedLessons?.[l.id]) || assignments.some(a => !progress.assignmentSubmissions?.[a.id]?.text?.trim()) || (course.programme && !(progress.programmeState?.examAttempts || []).some((a: any) => a.passed)) || !juniorComplete) return res.status(409).json({ error: course.id === 'course-junior-ai-academy-01' ? 'Complete all lessons, earn approval on all 16 Weekly Studio Check-Ins, and save your individual reflections before requesting a certificate.' : 'Complete the required lessons, assignments and assessment before requesting a certificate.' });
+  const certificateAlreadyIssued = Boolean(progress.certificate?.id);
   progress.certificate ||= { id: progress.programmeState?.certificateId || `V79-${crypto.randomUUID()}`, name: user.name, issuedAt: new Date().toISOString(), courseTitle: course.title };
-  write(users); res.json(progress.certificate);
+  write(users);
+  if (!certificateAlreadyIssued) {
+    safeQueueAcademyEvent({
+      type: 'certificate.issued',
+      occurredAt: progress.certificate.issuedAt,
+      organizationRef: user.id,
+      subjectId: user.id,
+      correlationId: progress.certificate.id,
+      payload: { courseId: course.id, courseTitle: course.title, certificateId: progress.certificate.id }
+    });
+  }
+  res.json(progress.certificate);
 });
 learnerRouter.post('/checkout', (_req, res) => res.status(503).json({ code: 'BILLING_NOT_CONFIGURED', error: 'Online subscriptions are coming soon. No payment has been taken.' }));
 export const learnerAdminRouter = express.Router();
