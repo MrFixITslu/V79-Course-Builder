@@ -36,6 +36,7 @@ import { Course, Module, Lesson, Quiz } from '../types';
 import { ContentBlock, Assignment, Download as DownloadType } from '../types/course-builder-v2';
 import { ProgrammeStatus } from '../types/programme';
 import { BusinessAdvantageProgramme } from './BusinessAdvantageProgramme';
+import { JuniorTeamStudio } from './JuniorTeamStudio';
 import { buildProgrammeStatus, normalizeProgrammeState } from '../lib/programmeScoring';
 
 interface StudentPortalProps {
@@ -1190,6 +1191,10 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
               <div className="bg-white border border-slate-200 p-8 rounded-2xl shadow-2xs">
                 {renderMarkdown(currentLesson.lessonContent)}
               </div>
+            )}
+
+            {course.id === 'course-junior-ai-academy-01' && currentLesson && currentLesson.orderNumber === (lessonsMap[currentLesson.moduleId]?.length || 0) && (
+              <JuniorTeamStudio courseId={course.id} missionNumber={currentModuleIndex + 1} learnerId={learnerId} />
             )}
 
             {/* 4. Lesson Content Blocks (Visual Blocks) */}
