@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { ensureDataEngineeringCourse } from '../data/dataEngineeringCourse';
 import {
   ContentBlock,
   Media,
@@ -86,6 +87,13 @@ export function initAndMigrateDb(): StoreSchema {
       migrated = true;
     }
   });
+
+  // Seed the complete Data Engineering course exactly once. Existing copies are
+  // never overwritten so administrators remain free to edit the curriculum.
+  if (ensureDataEngineeringCourse(db)) {
+    migrated = true;
+    console.log('[Seed] Data Engineering Foundations to Microsoft Fabric course added.');
+  }
 
   if (migrated || !fs.existsSync(DATA_FILE)) {
     saveDb(db as StoreSchema);
