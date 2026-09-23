@@ -61,6 +61,43 @@ try {
   await api(`/api/learners/${account.data.user.id}/membership`,{method:'PUT',cookie:admin,body:{status:'active',expiresAt:new Date(Date.now()+86400000).toISOString()}});
   await api(`/api/learner/enroll/${premium.id}`,{method:'POST',cookie:learner});
   assert.equal((await api(`/api/public/modules/${mod.id}/lessons`,{cookie:learner})).data[0].lessonContent,'PROTECTED_CONTENT');
+
+  // Junior Academy: team-of-three, project planning, risks, weekly review and revision.
+  const junior=source.courses.find(c=>c.id==='course-junior-ai-academy-01');assert.ok(junior);
+  const mate2=await api('/api/learner/register',{method:'POST',body:{email:'mate2@example.test',name:'Team Mate Two',password:'mate-two-password-123'}});
+  const mate3=await api('/api/learner/register',{method:'POST',body:{email:'mate3@example.test',name:'Team Mate Three',password:'mate-three-password-123'}});
+  for (const person of [mate2,mate3]) {
+    await api(`/api/learners/${person.data.user.id}/membership`,{method:'PUT',cookie:admin,body:{status:'active',expiresAt:new Date(Date.now()+86400000).toISOString()}});
+  }
+  await api(`/api/learner/enroll/${junior.id}`,{method:'POST',cookie:learner});
+  await api(`/api/learner/enroll/${junior.id}`,{method:'POST',cookie:mate2.cookie});
+  await api(`/api/learner/enroll/${junior.id}`,{method:'POST',cookie:mate3.cookie});
+  const formed=(await api(`/api/junior-admin/${junior.id}/auto-form`,{method:'POST',cookie:admin})).data;
+  assert.equal(formed.created,1);assert.equal(formed.teams[0].memberIds.length,3);assert.equal(formed.unassigned.length,0);
+  const cookieById=new Map([[account.data.user.id,learner],[mate2.data.user.id,mate2.cookie],[mate3.data.user.id,mate3.cookie]]);
+  const leaderId=formed.teams[0].currentLeaderId;const leaderCookie=cookieById.get(leaderId);assert.ok(leaderCookie);
+  const nonLeaderId=formed.teams[0].memberIds.find(id=>id!==leaderId);const nonLeaderCookie=cookieById.get(nonLeaderId);assert.ok(nonLeaderCookie);
+  const team=(await api(`/api/learner/junior/${junior.id}/team`,{cookie:leaderCookie})).data.team;
+  assert.equal(team.members.length,3);
+  await api(`/api/learner/junior/${junior.id}/team`,{method:'PUT',cookie:leaderCookie,body:{charter:'We include everyone and tell the team early if we are stuck.',decisionRule:'Listen first, then choose fairly.',conflictAgreement:'Use CALM and ask an adult for unsafe situations.',project:{title:'Reef Helper',problem:'Help children learn how to protect reefs.',audience:'Primary school children',description:'A short multimedia reef-awareness campaign.',status:'Planning'}}});
+  await api(`/api/learner/junior/${junior.id}/tasks`,{method:'PUT',cookie:leaderCookie,body:{tasks:[{title:'Research reef facts',ownerId:leaderId,status:'Doing',dueWeek:1}]}});
+  await api(`/api/learner/junior/${junior.id}/risks`,{method:'PUT',cookie:leaderCookie,body:{risks:[{title:'We might use an unverified fact',level:'Medium',prevention:'Check two trusted sources',backupPlan:'Remove the claim until verified',ownerId:leaderId,status:'Open'}]}});
+  for (const [id,cookie] of cookieById) {
+    await api(`/api/learner/junior/${junior.id}/reflections/1`,{method:'PUT',cookie,body:{helped:`Contribution by ${id}`,learned:'AI results need human checking.',next:'Complete my assigned task.'}});
+  }
+  await api(`/api/learner/junior/${junior.id}/submissions/1`,{method:'POST',cookie:nonLeaderCookie,status:403,body:{artifactText:'Should be rejected'}});
+  let checkIn=(await api(`/api/learner/junior/${junior.id}/submissions/1`,{method:'POST',cookie:leaderCookie,body:{artifactText:'Mission 1 charter and project plan completed.',leaderReport:{planned:'Form our team and choose a project.',finished:'Charter and project idea.',help:'We need feedback on scope.'},riskUpdate:'Our first risk is checking reef facts.'}})).data.submission;
+  assert.equal(checkIn.status,'Submitted');assert.equal(checkIn.revision,1);assert.equal(Object.keys(checkIn.individualReflections).length,3);
+  checkIn=(await api(`/api/junior-admin/submissions/${checkIn.id}/review`,{method:'PUT',cookie:admin,body:{status:'Needs Changes',strong:'Clear purpose.',improve:'Make the audience more specific.',next:'Revise and resubmit.',rubric:{learning:3,quality:3,teamwork:4,responsibility:3,safety:4}}})).data.submission;
+  assert.equal(checkIn.status,'Needs Changes');
+  checkIn=(await api(`/api/learner/junior/${junior.id}/submissions/1`,{method:'POST',cookie:leaderCookie,body:{artifactText:'Mission 1 revised for primary school reef learners.',leaderReport:{planned:'Revise audience.',finished:'Audience revised.',help:'None.'},riskUpdate:'Fact-check task remains open.'}})).data.submission;
+  assert.equal(checkIn.revision,2);
+  checkIn=(await api(`/api/junior-admin/submissions/${checkIn.id}/review`,{method:'PUT',cookie:admin,body:{status:'Approved',strong:'Revision addressed the feedback.',improve:'No required changes.',next:'Move to the Prompt Bank.',rubric:{learning:4,quality:4,teamwork:4,responsibility:4,safety:4}}})).data.submission;
+  assert.equal(checkIn.status,'Approved');
+  await api(`/api/learner/junior/${junior.id}/conflicts`,{method:'POST',cookie:mate2.cookie,body:{week:1,happened:'We wanted different project names.',feelings:'Both ideas mattered.',calmStep:'Look for fair choices',agreement:'Combine the strongest words.',nextTime:'Listen fully before voting.'},status:201});
+  const conflictRows=(await api(`/api/junior-admin/${junior.id}/conflicts`,{cookie:admin})).data.conflictReflections;
+  assert.equal(conflictRows.length,1);
+  await api(`/api/learner/certificate/${junior.id}`,{method:'POST',cookie:leaderCookie,status:409});
   await api(`/api/learners/${account.data.user.id}/membership`,{method:'PUT',cookie:admin,body:{status:'inactive'}});
   await api(`/api/public/lessons/${lesson.id}/quiz`,{cookie:learner,status:403});
   await api(`/api/courses/${premium.id}`,{method:'DELETE',cookie:admin});
