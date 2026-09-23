@@ -37,6 +37,7 @@ import { ContentBlock, Assignment, Download as DownloadType } from '../types/cou
 import { ProgrammeStatus } from '../types/programme';
 import { BusinessAdvantageProgramme } from './BusinessAdvantageProgramme';
 import { JuniorTeamStudio } from './JuniorTeamStudio';
+import { NetworkingLab } from './NetworkingLab';
 import { buildProgrammeStatus, normalizeProgrammeState } from '../lib/programmeScoring';
 
 interface StudentPortalProps {
@@ -1226,6 +1227,10 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
 
             {course.id === 'course-junior-ai-academy-01' && currentLesson && currentLesson.orderNumber === (lessonsMap[currentLesson.moduleId]?.length || 0) && (
               <JuniorTeamStudio courseId={course.id} missionNumber={currentModuleIndex + 1} learnerId={learnerId} />
+            )}
+
+            {course.id === 'course-junior-networking-academy-01' && currentLesson?.orderNumber === 2 && (
+              <NetworkingLab missionNumber={currentModuleIndex + 1} />
             )}
 
             {/* 4. Lesson Content Blocks (Visual Blocks) */}
