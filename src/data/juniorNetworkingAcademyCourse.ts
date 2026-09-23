@@ -532,9 +532,45 @@ function missionImages(missionNumber: number, lessonIndex: number) {
 
 export function ensureJuniorNetworkingAcademyCourse(db: any): boolean {
   if (!db || !Array.isArray(db.courses) || !Array.isArray(db.publishingLogs)) return false;
-  const marker = 'junior-networking-course-seed-v1';
-  if (db.publishingLogs.some((log: any) => log.id === marker)) return false;
-  if (db.courses.some((course: any) => course.id === JUNIOR_NETWORKING_COURSE_ID)) return false;
+
+  const seedMarker = 'junior-networking-course-seed-v1';
+  const publicationMarker = 'junior-networking-course-publication-v2';
+  const existingCourse = db.courses.find((course: any) => course.id === JUNIOR_NETWORKING_COURSE_ID);
+  const publicationMigrated = db.publishingLogs.some((log: any) => log.id === publicationMarker);
+
+  // Hotfix migration for the first Networking Academy release. That release
+  // was accidentally seeded as Draft, which kept it out of /api/public/courses
+  // even though deployment itself succeeded. Promote only that original Draft
+  // state once. If an administrator has already chosen another status, preserve
+  // it and mark the migration complete so later restarts never override it.
+  if (existingCourse) {
+    if (publicationMigrated) return false;
+
+    const previousStatus = existingCourse.status || 'Draft';
+    if (previousStatus === 'Draft') {
+      existingCourse.status = 'Published';
+      existingCourse.updatedAt = new Date().toISOString();
+    }
+
+    db.publishingLogs.push({
+      id: publicationMarker,
+      courseId: JUNIOR_NETWORKING_COURSE_ID,
+      courseTitle: existingCourse.title,
+      event: previousStatus === 'Draft' ? 'Publication Hotfix' : 'Publication State Preserved',
+      fromStatus: previousStatus,
+      toStatus: existingCourse.status,
+      performedBy: 'System Migration',
+      timestamp: new Date().toISOString(),
+      details: previousStatus === 'Draft'
+        ? 'Published the original Networking Academy seed so it appears in the public Academy catalog.'
+        : 'Networking Academy status was already changed by an administrator; preserved that status and completed the publication migration.'
+    });
+    return true;
+  }
+
+  // Preserve deliberate deletion behavior. Once the original seed marker
+  // exists, a deleted course is not recreated automatically.
+  if (db.publishingLogs.some((log: any) => log.id === seedMarker)) return false;
 
   const createdAt = '2026-09-23T18:45:00.000Z';
   const course = {
@@ -580,7 +616,7 @@ export function ensureJuniorNetworkingAcademyCourse(db: any): boolean {
       'Create physical/logical diagrams, IP plans, port maps, risk plans and test evidence',
       'Design, build or simulate, test and present a complete small network'
     ],
-    status: 'Draft',
+    status: 'Published',
     pricingType: 'subscription',
     price: 0,
     createdAt,
@@ -655,15 +691,26 @@ export function ensureJuniorNetworkingAcademyCourse(db: any): boolean {
   });
 
   db.publishingLogs.push({
-    id: marker,
+    id: seedMarker,
     courseId: JUNIOR_NETWORKING_COURSE_ID,
     courseTitle: course.title,
     event: 'Course Seeded',
     fromStatus: 'None',
-    toStatus: 'Draft',
+    toStatus: 'Published',
     performedBy: 'Admin',
     timestamp: createdAt,
     details: 'Added the 20-mission V79 Junior Networking Academy for ages 12–17.'
+  });
+  db.publishingLogs.push({
+    id: publicationMarker,
+    courseId: JUNIOR_NETWORKING_COURSE_ID,
+    courseTitle: course.title,
+    event: 'Publication State Initialized',
+    fromStatus: 'None',
+    toStatus: 'Published',
+    performedBy: 'System Migration',
+    timestamp: createdAt,
+    details: 'Initialized Networking Academy as visible in the public Academy catalog.'
   });
 
   return true;
