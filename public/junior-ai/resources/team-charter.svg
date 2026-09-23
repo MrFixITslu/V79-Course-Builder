@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1600" viewBox="0 0 1200 1600">
+<rect width="1200" height="1600" fill="#f8fafc"/>
+<rect width="1200" height="180" fill="#4f46e5"/>
+<text x="70" y="78" font-family="Arial" font-size="50" font-weight="900" fill="#fff">AI Studio Team Charter</text>
+<text x="70" y="128" font-family="Arial" font-size="24" font-weight="600" fill="#fff">Mission 1 • Make your teamwork agreement before you build.</text>
+<rect x="70" y="245" width="1060" height="130" rx="24" fill="#ffffff" stroke="#cbd5e1" stroke-width="3"/>
+<text x="105" y="293" font-family="Arial" font-size="30" font-weight="800" fill="#4f46e5">Our team name</text>
+<line x1="105" y1="333" x2="1090" y2="333" stroke="#cbd5e1" stroke-width="2"/><rect x="70" y="403" width="1060" height="174" rx="24" fill="#ffffff" stroke="#cbd5e1" stroke-width="3"/>
+<text x="105" y="451" font-family="Arial" font-size="30" font-weight="800" fill="#4f46e5">Our project idea</text>
+<line x1="105" y1="491" x2="1090" y2="491" stroke="#cbd5e1" stroke-width="2"/><line x1="105" y1="535" x2="1090" y2="535" stroke="#cbd5e1" stroke-width="2"/><rect x="70" y="605" width="1060" height="218" rx="24" fill="#ffffff" stroke="#cbd5e1" stroke-width="3"/>
+<text x="105" y="653" font-family="Arial" font-size="30" font-weight="800" fill="#4f46e5">How we include everyone and share the work</text>
+<line x1="105" y1="693" x2="1090" y2="693" stroke="#cbd5e1" stroke-width="2"/><line x1="105" y1="737" x2="1090" y2="737" stroke="#cbd5e1" stroke-width="2"/><line x1="105" y1="781" x2="1090" y2="781" stroke="#cbd5e1" stroke-width="2"/><rect x="70" y="851" width="1060" height="174" rx="24" fill="#ffffff" stroke="#cbd5e1" stroke-width="3"/>
+<text x="105" y="899" font-family="Arial" font-size="30" font-weight="800" fill="#4f46e5">How we make decisions fairly</text>
+<line x1="105" y1="939" x2="1090" y2="939" stroke="#cbd5e1" stroke-width="2"/><line x1="105" y1="983" x2="1090" y2="983" stroke="#cbd5e1" stroke-width="2"/><rect x="70" y="1053" width="1060" height="174" rx="24" fill="#ffffff" stroke="#cbd5e1" stroke-width="3"/>
+<text x="105" y="1101" font-family="Arial" font-size="30" font-weight="800" fill="#4f46e5">How we use CALM when we disagree</text>
+<line x1="105" y1="1141" x2="1090" y2="1141" stroke="#cbd5e1" stroke-width="2"/><line x1="105" y1="1185" x2="1090" y2="1185" stroke="#cbd5e1" stroke-width="2"/><rect x="70" y="1255" width="1060" height="174" rx="24" fill="#ffffff" stroke="#cbd5e1" stroke-width="3"/>
+<text x="105" y="1303" font-family="Arial" font-size="30" font-weight="800" fill="#4f46e5">This week's Leader / Builder / Checker</text>
+<line x1="105" y1="1343" x2="1090" y2="1343" stroke="#cbd5e1" stroke-width="2"/><line x1="105" y1="1387" x2="1090" y2="1387" stroke="#cbd5e1" stroke-width="2"/>
+<text x="70" y="1545" font-family="Arial" font-size="22" font-weight="700" fill="#64748b">V79 Junior AI Academy • Print or complete with your instructor</text>
+</svg>
