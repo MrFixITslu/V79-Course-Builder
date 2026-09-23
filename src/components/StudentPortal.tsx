@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   GraduationCap,
   BookOpen,
@@ -28,10 +28,14 @@ import {
   DollarSign,
   Info,
   Layers,
-  Sparkle
+  Sparkle,
+  BarChart3
 } from 'lucide-react';
 import { Course, Module, Lesson, Quiz } from '../types';
 import { ContentBlock, Assignment, Download as DownloadType } from '../types/course-builder-v2';
+import { ProgrammeStatus } from '../types/programme';
+import { BusinessAdvantageProgramme } from './BusinessAdvantageProgramme';
+import { buildProgrammeStatus, normalizeProgrammeState } from '../lib/programmeScoring';
 
 interface StudentPortalProps {
   courseSlug: string;
@@ -43,6 +47,8 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
   const [lessonsMap, setLessonsMap] = useState<{ [moduleId: string]: Lesson[] }>({});
   const [currentLesson, setCurrentLesson] = useState<Lesson | null>(null);
   const [currentModuleIndex, setCurrentModuleIndex] = useState<number>(0);
+  const [showProgrammeHub, setShowProgrammeHub] = useState<boolean>(false);
+  const [programmeStatus, setProgrammeStatus] = useState<ProgrammeStatus | null>(null);
   
   // Custom public-only sub-collections
   const [contentBlocks, setContentBlocks] = useState<ContentBlock[]>([]);
@@ -81,7 +87,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
   
   // Certificate states
   const [showCertificate, setShowCertificate] = useState<boolean>(false);
-  const [studentName, setStudentName] = useState<string>('Alex Mercer');
+  const [studentName, setStudentName] = useState<string>('');
   const [certDate, setCertDate] = useState<string>(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }));
 
   // Scroll to active lesson ref
@@ -102,6 +108,22 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
 
   useEffect(() => {
     fetchAllPublished();
+    try {
+      const savedStudent = JSON.parse(localStorage.getItem('v79_student_user') || 'null');
+      if (savedStudent?.name) setStudentName(savedStudent.name);
+    } catch {
+      // Keep the editable fallback when no student profile exists.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (programmeStatus?.finalExamPassedAt) {
+      setCertDate(new Date(programmeStatus.finalExamPassedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }));
+    }
+  }, [programmeStatus?.finalExamPassedAt]);
+
+  const handleProgrammeStatusChange = useCallback((nextStatus: ProgrammeStatus) => {
+    setProgrammeStatus(nextStatus);
   }, []);
 
   const isCoursePaid = (c: Course | null) => {
@@ -136,6 +158,8 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
         }
         const courseData: Course = await courseRes.json();
         setCourse(courseData);
+        setProgrammeStatus(null);
+        setShowProgrammeHub(Boolean(courseData.programme));
 
         // Check paid vs enrolled state
         const paidCourse = courseData.pricingType === 'premium' || (typeof courseData.price === 'number' && courseData.price > 0);
@@ -188,8 +212,11 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
         }
         setLessonsMap(lMap);
 
-        // If course is free or already enrolled, auto-select first lesson
-        if ((!paidCourse || hasPaidInStorage) && firstLesson) {
+        // Programme courses start in their diagnostic/workbook hub. Ordinary
+        // courses retain the existing behaviour of opening the first lesson.
+        if (courseData.programme) {
+          setCurrentLesson(null);
+        } else if ((!paidCourse || hasPaidInStorage) && firstLesson) {
           setCurrentLesson(firstLesson);
         }
 
@@ -285,6 +312,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
       if (modules.length > 0 && lessonsMap[modules[0].id]?.length > 0) {
         setCurrentLesson(lessonsMap[modules[0].id][0]);
         setCurrentModuleIndex(0);
+        setShowProgrammeHub(false);
       }
     }, 750);
   };
@@ -312,6 +340,41 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
   });
   const completedCount = Object.keys(completedLessons).filter(id => completedLessons[id]).length;
   const progressPercent = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
+  const certificateEligible = course?.programme
+    ? programmeStatus?.readyForCertificate === true
+    : progressPercent === 100;
+
+  useEffect(() => {
+    if (!course?.programme) return;
+    try {
+      const raw = localStorage.getItem(`v79_programme_state_${course.id}`);
+      const saved = normalizeProgrammeState(raw ? JSON.parse(raw) : null, course.programme.version);
+      const requiredAssignments = assignments.filter((assignment) => assignment.courseId === course.id && (assignment as Assignment & { required?: boolean }).required !== false);
+      const submittedCount = requiredAssignments.filter((assignment) => Boolean(assignmentSubmissions[assignment.id])).length;
+      setProgrammeStatus(buildProgrammeStatus(
+        course.programme,
+        progressPercent,
+        submittedCount,
+        requiredAssignments.length,
+        saved.examAttempts,
+        saved.certificateId
+      ));
+    } catch {
+      // The programme hub will offer a fresh, valid state if browser data is corrupt.
+    }
+  }, [course, progressPercent, assignments, assignmentSubmissions]);
+
+  const openProgrammeModule = (moduleNumber: number, target: 'first' | 'last' = 'first') => {
+    const moduleIndex = moduleNumber - 1;
+    const module = modules[moduleIndex];
+    if (!module) return;
+    const moduleLessons = lessonsMap[module.id] || [];
+    if (!moduleLessons.length) return;
+    const lesson = target === 'last' ? moduleLessons[moduleLessons.length - 1] : moduleLessons[0];
+    setCurrentModuleIndex(moduleIndex);
+    setCurrentLesson(lesson);
+    setShowProgrammeHub(false);
+  };
 
   // Handle Quiz Submissions
   const handleQuizSubmit = () => {
@@ -525,11 +588,34 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
             <p className="text-[10px] text-slate-400 mt-0.5 font-medium">Instructor: {course.instructor}</p>
           </div>
 
+          {course.programme && isEnrolled && (
+            <button
+              onClick={() => {
+                setShowProgrammeHub(true);
+                setCurrentLesson(null);
+              }}
+              className={`w-full p-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-between ${
+                showProgrammeHub
+                  ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-sm'
+                  : 'bg-white hover:bg-amber-50 text-slate-700 border-slate-200'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4" />
+                <span>Business Advantage Hub</span>
+              </div>
+              <span className="text-[9px] uppercase font-extrabold">Score · Plan · Exam</span>
+            </button>
+          )}
+
           {/* Quick Access to Course Introduction / Overview */}
           <button
-            onClick={() => setCurrentLesson(null)}
+            onClick={() => {
+              setShowProgrammeHub(false);
+              setCurrentLesson(null);
+            }}
             className={`w-full p-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-between ${
-              currentLesson === null
+              currentLesson === null && !showProgrammeHub
                 ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                 : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
             }`}
@@ -580,7 +666,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
               </div>
               <div className="flex items-center justify-between text-[10px] text-slate-400 pt-0.5">
                 <span>{completedCount} of {totalLessons} completed</span>
-                {progressPercent === 100 && (
+                {certificateEligible && (
                   <span className="text-emerald-600 font-semibold flex items-center gap-0.5">
                     Ready for Certificate! 🎓
                   </span>
@@ -590,7 +676,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
           )}
 
           {/* Certificate Badge Callout */}
-          {isEnrolled && progressPercent === 100 && (
+          {isEnrolled && certificateEligible && (
             <button
               onClick={() => setShowCertificate(true)}
               className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5 animate-bounce"
@@ -633,6 +719,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                           if (accessible) {
                             setCurrentLesson(les);
                             setCurrentModuleIndex(modIdx);
+                            setShowProgrammeHub(false);
                           } else {
                             setShowPaymentModal(true);
                           }
@@ -763,8 +850,20 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
           </div>
         )}
 
-        {/* --- VIEW CHOICE: 1) Course Introduction Page OR 2) Active Lesson View --- */}
-        {currentLesson === null ? (
+        {/* --- VIEW CHOICE: Programme Hub, Course Introduction, or Active Lesson --- */}
+        {showProgrammeHub && course.programme ? (
+          <BusinessAdvantageProgramme
+            courseId={course.id}
+            programme={course.programme}
+            modules={modules}
+            lessonsMap={lessonsMap}
+            completedLessons={completedLessons}
+            assignments={assignments}
+            assignmentSubmissions={assignmentSubmissions}
+            onOpenModule={openProgrammeModule}
+            onStatusChange={handleProgrammeStatusChange}
+          />
+        ) : currentLesson === null ? (
           /* COURSE INTRODUCTION & OVERVIEW PAGE */
           <div className="p-8 max-w-4xl mx-auto w-full space-y-8 flex-1">
             
@@ -851,6 +950,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                           onClick={() => {
                             setCurrentLesson(lessonsMap[modules[0].id][0]);
                             setCurrentModuleIndex(0);
+                            setShowProgrammeHub(false);
                           }}
                           className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm"
                         >
@@ -938,6 +1038,7 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                                     if (accessible) {
                                       setCurrentLesson(les);
                                       setCurrentModuleIndex(mIdx);
+                                      setShowProgrammeHub(false);
                                     } else {
                                       setShowPaymentModal(true);
                                     }
@@ -1503,7 +1604,8 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
               <div className="flex items-end justify-end">
                 <button
                   onClick={() => window.print()}
-                  className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-sm flex items-center gap-1.5 transition-colors"
+                  disabled={!studentName.trim()}
+                  className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-sm flex items-center gap-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Printer className="w-4 h-4" />
                   Print / Save as PDF
@@ -1526,10 +1628,10 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
               <div className="space-y-1.5 pt-4">
                 <GraduationCap className="w-12 h-12 text-amber-500 mx-auto" />
                 <span className="text-[10px] font-black uppercase tracking-widest text-amber-600">
-                  V79 Academy Certification of Mastery
+                  V79 Academy Programme Award
                 </span>
                 <h1 className="text-3xl font-extrabold text-indigo-950 font-serif tracking-tight mt-3">
-                  Certificate of Completion
+                  {course.programme?.certificate.title || 'Certificate of Completion'}
                 </h1>
                 <p className="text-xs text-slate-400 italic">This is proudly presented to</p>
               </div>
@@ -1539,14 +1641,19 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                   {studentName}
                 </h2>
                 <p className="text-[11px] text-slate-500 max-w-lg mx-auto leading-relaxed mt-4">
-                  for successfully finishing and demonstrating comprehensive mastery of all curriculum, homework assignments, and exams in the course:
+                  {course.programme
+                    ? `for successfully completing all required lessons and practical assignments and passing the final examination with a score of ${programmeStatus?.bestExamScore || 0}%.`
+                    : 'for successfully completing the curriculum and required learning activities in the course:'}
                 </p>
                 <p className="text-base font-bold text-indigo-900 uppercase tracking-wide mt-2">
                   {course.title}
                 </p>
                 <p className="text-[10px] text-slate-400 font-semibold mt-1">
-                  V79 Application Core Focus: {course.category}
+                  {course.programme ? 'Practical Business Success for Caribbean Entrepreneurs' : `V79 Application Core Focus: ${course.category}`}
                 </p>
+                {programmeStatus?.certificateId && (
+                  <p className="text-[9px] text-slate-500 font-mono mt-2">Credential ID: {programmeStatus.certificateId}</p>
+                )}
               </div>
 
               {/* Badges and Signatures */}
@@ -1564,9 +1671,9 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                 </div>
 
                 <div className="text-center sm:text-right space-y-0.5">
-                  <p className="text-[10px] text-slate-400">Authorized Signature</p>
-                  <p className="font-serif italic text-slate-800 font-semibold text-sm">Elena Vance, CFA</p>
-                  <p className="text-[8px] text-slate-400 font-bold uppercase">Academy Lead Director</p>
+                  <p className="text-[10px] text-slate-400">Issued by</p>
+                  <p className="font-serif italic text-slate-800 font-semibold text-sm">V79 Academy</p>
+                  <p className="text-[8px] text-slate-400 font-bold uppercase">Programme Administration</p>
                 </div>
               </div>
             </div>

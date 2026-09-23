@@ -1,3 +1,5 @@
+import type { CourseProgramme } from './types/programme';
+
 export type AppCategory = 'Fire Finance Pro (FFPRO2)' | 'SIWM' | 'Tiquet' | 'KashDash' | 'General';
 
 export type DifficultyLevel = 'Beginner' | 'Intermediate' | 'Advanced';
@@ -28,6 +30,7 @@ export interface Course {
   // manually picking "Uploaded" from a dropdown.
   websiteAppId?: number;
   websitePublishedAt?: string;
+  programme?: CourseProgramme;
 }
 
 export interface Module {
