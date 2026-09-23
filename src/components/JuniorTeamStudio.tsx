@@ -127,6 +127,31 @@ export function JuniorTeamStudio({ courseId, missionNumber, learnerId }: Props) 
     setRiskTitle('');
   }
 
+  async function saveTeamPlan() {
+    if (!team) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/learner/junior/${courseId}/team`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          charter: team.charter,
+          decisionRule: team.decisionRule,
+          conflictAgreement: team.conflictAgreement,
+          project: team.project
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setTeam(data.team);
+      setMessage('Team Charter and project plan saved.');
+    } catch (e: any) {
+      setMessage(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveReflection() {
     setBusy(true);
     try {
@@ -206,12 +231,39 @@ export function JuniorTeamStudio({ courseId, missionNumber, learnerId }: Props) 
 
       {message && <p role="status" className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-xs text-indigo-900">{message}</p>}
 
-      <div className="rounded-2xl border border-slate-200 p-4">
-        <h3 className="font-bold flex items-center gap-2"><ClipboardCheck size={17}/>Project</h3>
-        <p className="mt-2 text-sm font-semibold">{team.project.title || 'Project idea still being chosen'}</p>
-        {team.project.problem && <p className="mt-1 text-xs text-slate-600"><b>Problem:</b> {team.project.problem}</p>}
-        {team.project.audience && <p className="mt-1 text-xs text-slate-600"><b>Audience:</b> {team.project.audience}</p>}
-      </div>
+      <details open={missionNumber === 1} className="rounded-2xl border border-slate-200 p-4">
+        <summary className="cursor-pointer font-bold flex items-center gap-2"><ClipboardCheck size={17}/>Team Charter & Project Plan</summary>
+        <p className="mt-2 text-xs text-slate-500">Build this together in Mission 1, then update it when your project becomes clearer.</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="text-xs font-semibold text-slate-600">Project title
+            <input value={team.project.title} onChange={e=>setTeam({...team,project:{...team.project,title:e.target.value}})} placeholder="What are we making?" className="academy-input mt-1 w-full"/>
+          </label>
+          <label className="text-xs font-semibold text-slate-600">Audience
+            <input value={team.project.audience} onChange={e=>setTeam({...team,project:{...team.project,audience:e.target.value}})} placeholder="Who is it for?" className="academy-input mt-1 w-full"/>
+          </label>
+          <label className="text-xs font-semibold text-slate-600 sm:col-span-2">Problem / opportunity
+            <textarea value={team.project.problem} onChange={e=>setTeam({...team,project:{...team.project,problem:e.target.value}})} placeholder="What are we helping, teaching, improving or creating?" className="academy-input mt-1 min-h-20 w-full"/>
+          </label>
+          <label className="text-xs font-semibold text-slate-600 sm:col-span-2">Project description
+            <textarea value={team.project.description} onChange={e=>setTeam({...team,project:{...team.project,description:e.target.value}})} placeholder="Describe the idea in your own words." className="academy-input mt-1 min-h-20 w-full"/>
+          </label>
+          <label className="text-xs font-semibold text-slate-600">Project stage
+            <select value={team.project.status} onChange={e=>setTeam({...team,project:{...team.project,status:e.target.value}})} className="academy-input mt-1 w-full">
+              <option>Idea</option><option>Planning</option><option>Building</option><option>Testing</option><option>Final</option>
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-slate-600 sm:col-span-2">Our Team Charter
+            <textarea value={team.charter} onChange={e=>setTeam({...team,charter:e.target.value})} placeholder="How will we share work, include everyone and keep our promises?" className="academy-input mt-1 min-h-24 w-full"/>
+          </label>
+          <label className="text-xs font-semibold text-slate-600">How we make decisions
+            <textarea value={team.decisionRule} onChange={e=>setTeam({...team,decisionRule:e.target.value})} className="academy-input mt-1 min-h-20 w-full"/>
+          </label>
+          <label className="text-xs font-semibold text-slate-600">How we handle disagreement
+            <textarea value={team.conflictAgreement} onChange={e=>setTeam({...team,conflictAgreement:e.target.value})} className="academy-input mt-1 min-h-20 w-full"/>
+          </label>
+        </div>
+        <button disabled={busy} onClick={saveTeamPlan} className="academy-primary mt-3">Save Team Plan</button>
+      </details>
 
       <div className="grid gap-5 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 p-4 space-y-3">
@@ -246,9 +298,32 @@ export function JuniorTeamStudio({ courseId, missionNumber, learnerId }: Props) 
         <div className="rounded-2xl border border-slate-200 p-4 space-y-3">
           <h3 className="font-bold flex items-center gap-2"><AlertTriangle size={17}/>Risk / Uh-Oh Plan</h3>
           {team.risks.length === 0 && <p className="text-xs text-slate-500">Ask: What could go wrong? How can we stop it? Who can help?</p>}
-          <div className="space-y-2">
-            {team.risks.map(risk => <div key={risk.id} className="rounded-xl bg-slate-50 p-3 text-xs"><div className="flex justify-between"><b>{risk.title}</b><span>{risk.level}</span></div><p className="text-slate-500 mt-1">Owner: {nameFor(risk.ownerId)}</p></div>)}
+          <div className="space-y-3">
+            {team.risks.map(risk => <div key={risk.id} className="rounded-xl bg-slate-50 p-3 text-xs space-y-2">
+              <div className="flex flex-wrap gap-2 items-center justify-between"><b>{risk.title}</b>
+                <div className="flex gap-2">
+                  <select value={risk.level} onChange={e=>setTeam({...team,risks:team.risks.map(r=>r.id===risk.id?{...r,level:e.target.value as Risk['level']}:r)})} className="rounded border p-1 text-[10px]">
+                    <option>Low</option><option>Medium</option><option>High</option>
+                  </select>
+                  <select value={risk.status} onChange={e=>setTeam({...team,risks:team.risks.map(r=>r.id===risk.id?{...r,status:e.target.value as Risk['status']}:r)})} className="rounded border p-1 text-[10px]">
+                    <option>Open</option><option>Handled</option>
+                  </select>
+                </div>
+              </div>
+              <label className="block text-[10px] font-bold text-slate-500">Prevention
+                <input value={risk.prevention} onChange={e=>setTeam({...team,risks:team.risks.map(r=>r.id===risk.id?{...r,prevention:e.target.value}:r)})} placeholder="How can we stop this?" className="academy-input mt-1 w-full"/>
+              </label>
+              <label className="block text-[10px] font-bold text-slate-500">Backup plan
+                <input value={risk.backupPlan} onChange={e=>setTeam({...team,risks:team.risks.map(r=>r.id===risk.id?{...r,backupPlan:e.target.value}:r)})} placeholder="What will we do if it happens?" className="academy-input mt-1 w-full"/>
+              </label>
+              <label className="block text-[10px] font-bold text-slate-500">Owner
+                <select value={risk.ownerId} onChange={e=>setTeam({...team,risks:team.risks.map(r=>r.id===risk.id?{...r,ownerId:e.target.value}:r)})} className="academy-input mt-1 w-full">
+                  {team.members.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </label>
+            </div>)}
           </div>
+          {team.risks.length > 0 && <button disabled={busy} onClick={()=>saveRisks(team.risks)} className="academy-primary">Save Risk Plans</button>}
           <div className="flex gap-2">
             <input value={riskTitle} onChange={e=>setRiskTitle(e.target.value)} placeholder="Add a risk / Uh-Oh" className="academy-input flex-1"/>
             <select value={riskOwner} onChange={e=>setRiskOwner(e.target.value)} className="academy-input">
