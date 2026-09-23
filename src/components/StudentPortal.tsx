@@ -1147,6 +1147,27 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
               )}
             </div>
 
+            {Array.isArray(currentLesson.imageUrls) && currentLesson.imageUrls.length > 0 && (
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                <p className="text-[11px] font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                  Mission Visuals
+                </p>
+                <div className={`grid gap-3 ${currentLesson.imageUrls.length > 1 ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
+                  {currentLesson.imageUrls.map((url, index) => (
+                    <figure key={url + index} className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                      <img
+                        src={url}
+                        alt={`${currentLesson.title} learning visual ${index + 1}`}
+                        loading="lazy"
+                        className="w-full h-auto object-contain"
+                      />
+                    </figure>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* 2. Audio/Video Block */}
             {(currentLesson.videoUrl || currentLesson.audioUrl) && (
               <div className="space-y-3 bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
