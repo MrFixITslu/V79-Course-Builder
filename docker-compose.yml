@@ -31,7 +31,8 @@ services:
       - TRUST_PROXY=${TRUST_PROXY:-0}
       - ADMIN_RESET_TOKEN=${ADMIN_RESET_TOKEN:-}
       - DATABASE_URL=postgresql://v79_admin:v79_secure_password@postgres:5432/v79_academy_builder
-      - GEMINI_API_KEY=${GEMINI_API_KEY}\n      - V79_PLATFORM_SHARED_SECRET=${V79_PLATFORM_SHARED_SECRET:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - V79_PLATFORM_SHARED_SECRET=${V79_PLATFORM_SHARED_SECRET:-}
       # Required to publish courses to the website (website2026 / VISION79
       # marketplace admin API). WEBSITE_ADMIN_PASSWORD must match that site's
       # current admin password - if that site is showing its forced
