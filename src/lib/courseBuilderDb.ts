@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { ensureDataEngineeringCourse } from '../data/dataEngineeringCourse';
+import { ensureIdeaToAdvantageCourse } from '../data/ideaToAdvantageCourse';
 import {
   ContentBlock,
   Media,
@@ -93,6 +94,11 @@ export function initAndMigrateDb(): StoreSchema {
   if (ensureDataEngineeringCourse(db)) {
     migrated = true;
     console.log('[Seed] Data Engineering Foundations to Microsoft Fabric course added.');
+  }
+
+  if (ensureIdeaToAdvantageCourse(db)) {
+    migrated = true;
+    console.log('[Seed] From Idea to Advantage Caribbean business programme added.');
   }
 
   if (migrated || !fs.existsSync(DATA_FILE)) {
@@ -810,4 +816,3 @@ export class PublishingLogRepository {
     return newLog;
   }
 }
-

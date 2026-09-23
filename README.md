@@ -14,6 +14,26 @@ The **V79 Academy Course Builder** is an enterprise-grade internal course author
 - **Automated Export System**: Package courses into structured JSON directories (`course.json`, `modules/`, `quizzes/`, `README.md`) ready for Academy publishing.
 - **AI Course Assistant**: Powered by Gemini to auto-generate course outlines, lesson descriptions, and quiz questions.
 
+### From Idea to Advantage programme
+
+The repository includes a published, editable Caribbean small-business programme at:
+
+```text
+/course/from-idea-to-advantage
+```
+
+It contains 12 modules, 36 lessons, 12 module quizzes, 12 practical assignments and a 24-question scenario examination. Its reusable programme layer adds:
+
+- A 40-question **Business Advantage Diagnostic** with separate pre-launch and operating-business wording.
+- Eight weighted capability areas with fair service-business wording for purchasing and resource management.
+- A starting score, priority modules, final score and category-by-category improvement comparison.
+- A 12-section **Business Advantage Workbook** that exports an editable operating plan.
+- Evidence-based assessment confidence that increases as workbook sections are completed.
+- Certificate eligibility only after 100% lesson completion, all required assignments and a final-exam score of at least 70%.
+- Browser-persisted progress that follows the existing Student Portal architecture.
+
+The course is seeded idempotently on first application start. Existing copies are never overwritten, preserving administrator edits and deliberate deletion.
+
 ---
 
 ## Tech Stack
@@ -95,4 +115,3 @@ To deploy the Course Builder with PostgreSQL and Nginx Proxy Manager (OpenResty)
 > - The application container is configured to run on **port 3030** (`PORT=3030`).
 > - Direct host access is available at `http://cb.v79sl.duckdns.org:3030` or `http://localhost:3030`.
 > - If forwarding in Nginx Proxy Manager to container `v79_course_builder`, set **Forward Port** to `3030`.
-
