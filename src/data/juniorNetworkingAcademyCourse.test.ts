@@ -26,11 +26,41 @@ assert.equal(ensureJuniorNetworkingAcademyCourse(db), false, 'networking seed mu
 
 const course = db.courses.find((c: any) => c.id === JUNIOR_NETWORKING_COURSE_ID);
 assert.ok(course);
-assert.equal(course.status, 'Draft');
+assert.equal(course.status, 'Published');
 assert.equal(course.pricingType, 'subscription');
 assert.equal(course.price, 0);
 assert.equal(course.difficultyLevel, 'Intermediate');
 assert.match(course.title, /Networking Academy/);
+
+// Existing production data from the first release must be migrated exactly once.
+const migratedDb: any = freshDb();
+migratedDb.courses.push({
+  ...course,
+  status: 'Draft',
+  updatedAt: '2026-09-23T18:45:00.000Z'
+});
+migratedDb.publishingLogs.push({
+  id: 'junior-networking-course-seed-v1',
+  courseId: JUNIOR_NETWORKING_COURSE_ID
+});
+assert.equal(ensureJuniorNetworkingAcademyCourse(migratedDb), true);
+assert.equal(migratedDb.courses[0].status, 'Published');
+assert.ok(migratedDb.publishingLogs.some((log: any) => log.id === 'junior-networking-course-publication-v2'));
+assert.equal(ensureJuniorNetworkingAcademyCourse(migratedDb), false, 'publication migration must run only once');
+
+// If an admin already changed the course status, the migration must preserve it.
+const adminChangedDb: any = freshDb();
+adminChangedDb.courses.push({
+  ...course,
+  status: 'Archived'
+});
+adminChangedDb.publishingLogs.push({
+  id: 'junior-networking-course-seed-v1',
+  courseId: JUNIOR_NETWORKING_COURSE_ID
+});
+assert.equal(ensureJuniorNetworkingAcademyCourse(adminChangedDb), true);
+assert.equal(adminChangedDb.courses[0].status, 'Archived');
+assert.equal(ensureJuniorNetworkingAcademyCourse(adminChangedDb), false);
 
 const modules = db.modules.filter((m: any) => m.courseId === JUNIOR_NETWORKING_COURSE_ID);
 const lessons = db.lessons.filter((l: any) => l.courseId === JUNIOR_NETWORKING_COURSE_ID);
