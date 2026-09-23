@@ -27,6 +27,7 @@ import { learner, learnerRouter, learnerAdminRouter } from './src/lib/learnerAcc
 import { juniorLearnerRouter, juniorAdminRouter } from './src/lib/juniorAcademyTeams';
 import { canReadCourse, courseSummary, lessonSummary, deleteCourseRecords } from './src/lib/academyAccess';
 import platformRouter from './src/lib/platformRoutes';
+import { startAcademyEventPump } from './src/lib/platformEvents';
 const app = express();
 app.disable('x-powered-by');
 if (process.env.TRUST_PROXY === '1') app.set('trust proxy', 1);
@@ -59,6 +60,7 @@ app.get("/healthz", (_req, res) => {
 });
 
 app.use("/api/platform", platformRouter);
+startAcademyEventPump();
 
 app.use("/api/learner/junior", juniorLearnerRouter);
 app.use("/api/learner", learnerRouter);
