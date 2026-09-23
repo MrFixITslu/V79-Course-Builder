@@ -1194,7 +1194,13 @@ function makeQuestion(moduleIndex: number, questionIndex: number, quizId: string
 }
 
 export function ensureDataEngineeringCourse(db: any): boolean {
-  if (!db || !Array.isArray(db.courses)) return false;
+  if (!db || !Array.isArray(db.courses) || !Array.isArray(db.publishingLogs)) return false;
+
+  // The log entry doubles as a one-time migration marker. If an administrator
+  // deliberately deletes this course later, a restart must respect that choice
+  // rather than silently recreating it.
+  const alreadySeeded = db.publishingLogs.some((log: any) => log.id === "de-course-seed-log-v1");
+  if (alreadySeeded) return false;
   if (db.courses.some((course: any) => course.id === DATA_ENGINEERING_COURSE_ID)) return false;
 
   const createdAt = "2026-09-23T13:30:00.000Z";
