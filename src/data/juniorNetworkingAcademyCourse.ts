@@ -514,6 +514,26 @@ function quizQuestion(mission: number, index: number, quizId: string, q: QuizSee
   };
 }
 
+function lessonDownloads(missionNumber: number, lessonIndex: number) {
+  if (lessonIndex !== 2) return [];
+  const resources: Array<{ name: string; url: string; size: string; type: string }> = [];
+  const add = (name: string, file: string) => resources.push({
+    name,
+    url: `/junior-networking/resources/${file}`,
+    size: 'Printable',
+    type: 'SVG worksheet'
+  });
+
+  if (missionNumber === 2) add('Network Hardware Inventory', 'hardware-inventory.svg');
+  if (missionNumber === 3) add('Rack Layout Planner', 'rack-layout.svg');
+  if (missionNumber === 4) add('Structured Cabling Schedule', 'cable-schedule.svg');
+  if ([8,9,12].includes(missionNumber)) add('IP, Subnet & VLAN Plan', 'ip-vlan-plan.svg');
+  if ([13,15].includes(missionNumber)) add('Wi-Fi & Security Plan', 'wireless-security-plan.svg');
+  if (missionNumber === 17) add('Network Troubleshooting Report', 'troubleshooting-report.svg');
+  if ([18,19,20].includes(missionNumber)) add('Final Network Design Checklist', 'final-design-checklist.svg');
+  return resources;
+}
+
 function missionImages(missionNumber: number, lessonIndex: number) {
   const n = String(missionNumber).padStart(2, '0');
   return [
@@ -614,7 +634,7 @@ export function ensureJuniorNetworkingAcademyCourse(db: any): boolean {
         videoUrl: lessonIndex === 0 ? `/junior-networking/media/mission-${String(missionNumber).padStart(2, '0')}-intro.mp4` : '',
         audioUrl: '',
         imageUrls: missionImages(missionNumber, lessonIndex),
-        downloads: [],
+        downloads: lessonDownloads(missionNumber, lessonIndex),
         exercisePrompt: lessonIndex === 0 ? mission.coreActivity : lessonIndex === 1 ? mission.engineerChallenge : mission.projectMilestone,
         orderNumber: lessonIndex + 1
       });
