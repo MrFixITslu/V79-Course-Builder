@@ -178,6 +178,10 @@ npm run dev
 
 ## Production Deployment (Docker Compose & Nginx Proxy Manager)
 
+> **Important:** The GitHub **Package & Publish Image** workflow validates and publishes the image to GHCR. It does **not** connect to the production server or restart the live containers. Your server/deployment platform must pull/rebuild the new image and start it separately.
+
+
+
 To deploy the Course Builder with PostgreSQL and Nginx Proxy Manager (OpenResty) for **cb.v79sl.duckdns.org**:
 
 1. **Ensure `proxy_network` exists**:
@@ -200,9 +204,11 @@ To deploy the Course Builder with PostgreSQL and Nginx Proxy Manager (OpenResty)
      - **Block Common Exploits**: **Enabled** (ON)
 
 > 💡 **Port 3030 & Domain Setup (`cb.v79sl.duckdns.org`)**:
-> - The application container is configured to run on **port 3030** (`PORT=3030`).
+> - The production Docker image defaults to **port 3030** and exposes **3030**.
+> - Docker Compose also sets `PORT=3030`.
 > - Direct host access is available at `http://cb.v79sl.duckdns.org:3030` or `http://localhost:3030`.
 > - If forwarding in Nginx Proxy Manager to container `v79_course_builder`, set **Forward Port** to `3030`.
+> - Container/orchestrator health checks may use `/healthz`; a healthy app returns `{"status":"ok"}`.
 
 ### Academy portal and memberships
 
