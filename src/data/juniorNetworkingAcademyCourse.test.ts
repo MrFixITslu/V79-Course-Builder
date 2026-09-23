@@ -72,6 +72,28 @@ for (const mission of [4,9,15,18,19,20]) {
   assert.ok(assignments.some((a: any) => a.moduleId === `jna-mod-${mission}`), `major assignment missing for mission ${mission}`);
 }
 
+const extraAssets = [
+  'public/junior-networking/images/hardware-glossary.svg',
+  'public/junior-networking/images/osi-model-poster.svg',
+  'public/junior-networking/images/troubleshooting-ladder.svg',
+  'public/junior-networking/resources/hardware-inventory.svg',
+  'public/junior-networking/resources/rack-layout.svg',
+  'public/junior-networking/resources/cable-schedule.svg',
+  'public/junior-networking/resources/ip-vlan-plan.svg',
+  'public/junior-networking/resources/wireless-security-plan.svg',
+  'public/junior-networking/resources/troubleshooting-report.svg',
+  'public/junior-networking/resources/final-design-checklist.svg'
+];
+for (const asset of extraAssets) {
+  assert.equal(existsSync(path.join(process.cwd(), asset)), true, `missing networking teaching asset: ${asset}`);
+}
+
+assert.ok(lessons.find((l: any) => l.id === 'jna-les-2-1').imageUrls.includes('/junior-networking/images/hardware-glossary.svg'));
+assert.ok(lessons.find((l: any) => l.id === 'jna-les-6-1').imageUrls.includes('/junior-networking/images/osi-model-poster.svg'));
+assert.ok(lessons.find((l: any) => l.id === 'jna-les-17-1').imageUrls.includes('/junior-networking/images/troubleshooting-ladder.svg'));
+assert.ok(lessons.find((l: any) => l.id === 'jna-les-4-3').downloads.some((d: any) => d.url.endsWith('/cable-schedule.svg')));
+assert.ok(lessons.find((l: any) => l.id === 'jna-les-20-3').downloads.some((d: any) => d.url.endsWith('/final-design-checklist.svg')));
+
 const curriculum = lessons.map((l: any) => `${l.title}\n${l.lessonContent}`).join('\n').toLowerCase();
 for (const required of ['osi', 'structured cabling', 'fiber', 'subnet', 'vlan', 'wi-fi', 'firewall', 'troubleshooting', 'ups']) {
   assert.ok(curriculum.includes(required), `curriculum missing required topic: ${required}`);
