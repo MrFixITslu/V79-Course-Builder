@@ -97,7 +97,7 @@ Students should learn early that a change is not complete until it has been test
 17. Troubleshooting Like a Network Technician
 18. Network Design and Documentation
 19. Build, Configure and Test the Network
-20. Final Network Engineer Demo Day
+20. NOC Challenge & Network Engineer Demo Day
 
 ## Interactive learning
 
