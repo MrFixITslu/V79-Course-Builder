@@ -1162,7 +1162,17 @@ export function StudentPortal({ courseSlug }: StudentPortalProps) {
                         controls
                         className="w-full h-full object-contain"
                         referrerPolicy="no-referrer"
-                      />
+                      >
+                        {currentLesson.videoUrl.endsWith('.mp4') && (
+                          <track
+                            kind="captions"
+                            srcLang="en"
+                            label="English"
+                            src={currentLesson.videoUrl.replace(/\.mp4$/, '.vtt')}
+                            default
+                          />
+                        )}
+                      </video>
                     </div>
                   </div>
                 )}
