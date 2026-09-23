@@ -46,6 +46,13 @@ docs/junior-ai-academy-blueprint.md
 docs/junior-ai-academy-mission-01.md
 docs/junior-ai-academy-missions-02-16.md
 docs/junior-ai-academy-team-project-model.md
+docs/junior-ai-academy-instructor-guardian-guide.md
+```
+
+Printable learner worksheets are stored in:
+
+```text
+public/junior-ai/resources/
 ```
 
 ### From Idea to Advantage programme
