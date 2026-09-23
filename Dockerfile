@@ -32,7 +32,6 @@ COPY --from=builder /app/dist ./dist
 
 EXPOSE 3030
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \\
-  CMD wget -q -O - http://127.0.0.1:3030/healthz >/dev/null || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD wget -q -O - http://127.0.0.1:3030/healthz >/dev/null || exit 1
 
 CMD ["node", "dist/server.cjs"]
