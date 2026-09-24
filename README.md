@@ -218,8 +218,11 @@ importing, deleting and changing course status refreshes the admin list. The lea
 refreshes on return to the tab and every 30 seconds. Only Published/Uploaded courses appear.
 Deleting a linked website course removes its remote entry first; if the website cannot be
 reached, deletion returns an error and preserves the local record for retry. Unpublishing a
-linked course follows the same rule. Set `ACADEMY_PUBLIC_URL` to the academy's HTTPS address
-so website publications link back to the correct portal. Existing remote entries should be
+linked course follows the same rule. Set the Academy app's `ACADEMY_PUBLIC_URL` to
+`https://v79academy.v79sl.com` (without `/academy`); website course links are built
+at `/course/:id`, while the learner catalogue is `https://v79academy.v79sl.com/academy`.
+Set the Hub app's `ACADEMY_PUBLIC_URL` to that full learner catalogue URL.
+The Academy setting generates website publication links; existing remote entries should be
 republished once to update their links. Curriculum edits still require the explicit Publish action.
 
 Choose **Free** or **Subscription access** in a course's Overview settings. Legacy Premium and
