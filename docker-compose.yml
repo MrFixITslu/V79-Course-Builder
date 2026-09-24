@@ -1,22 +1,6 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: v79_academy_postgres
-    environment:
-      POSTGRES_USER: v79_admin
-      POSTGRES_PASSWORD: v79_secure_password
-      POSTGRES_DB: v79_academy_builder
-    expose:
-      - "5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
-    networks:
-      - v79_internal
-    restart: always
-
   course-builder:
     build: .
     container_name: v79_course_builder
@@ -30,7 +14,6 @@ services:
       - ACADEMY_PUBLIC_URL=${ACADEMY_PUBLIC_URL:-}
       - TRUST_PROXY=${TRUST_PROXY:-0}
       - ADMIN_RESET_TOKEN=${ADMIN_RESET_TOKEN:-}
-      - DATABASE_URL=postgresql://v79_admin:v79_secure_password@postgres:5432/v79_academy_builder
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - V79_PLATFORM_SHARED_SECRET=${V79_PLATFORM_SHARED_SECRET:-}
       - V79_HUB_EVENT_URL=${V79_HUB_EVENT_URL:-http://v79-hub:3040/api/platform/events}
@@ -46,8 +29,6 @@ services:
       timeout: 5s
       start_period: 20s
       retries: 3
-    depends_on:
-      - postgres
     networks:
       - v79_internal
       - proxy_network
@@ -78,6 +59,3 @@ networks:
     driver: bridge
   proxy_network:
     external: true
-
-volumes:
-  postgres_data:
