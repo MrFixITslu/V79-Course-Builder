@@ -1,0 +1,14 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+node_modules
+dist
+data
+backups
+*.db
+*.db-*
+*.log
+public/junior-ai/media
+public/junior-networking/media
