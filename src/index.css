@@ -1,11 +1,33 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Public+Sans:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
-.academy-primary { background:#4f46e5; color:white; border-radius:.8rem; padding:.75rem 1.2rem; font-weight:650; font-size:.9rem; }
+@theme {
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  --v79-canvas: #f6f8fc;
+  --v79-ink: #0f172a;
+  --v79-muted: #475569;
+  --v79-border: #e2e8f0;
+  --v79-nav: #0b1220;
+  --v79-accent: #4338ca;
+}
+
+@layer base {
+  body { font-family: var(--font-sans); color: var(--v79-ink); }
+  h1, h2, h3, h4 { font-family: var(--font-display); }
+}
+
+.academy-primary { background:var(--v79-accent); color:white; border-radius:.8rem; padding:.75rem 1.2rem; min-height:44px; font-weight:650; font-size:.9rem; }
 .academy-primary:hover { background:#4338ca; }
 .academy-primary:disabled { opacity:.55; cursor:wait; }
 .academy-tab { padding:.6rem .8rem; border-radius:.7rem; }
 .academy-tab.active { background:#eef2ff; color:#4338ca; }
 .academy-input { display:block; width:100%; border:1px solid #cbd5e1; border-radius:.7rem; padding:.8rem; margin-top:.4rem; font-weight:400; }
+.academy-course-card { border-color:var(--v79-border); box-shadow:0 2px 12px rgb(15 23 42 / 5%); }
+.academy-course-card:hover { border-color:#a5b4fc; box-shadow:0 10px 28px -5px rgb(15 23 42 / 9%); }
 button, a, input, select, textarea { touch-action:manipulation; }
 :focus-visible { outline:3px solid #818cf8; outline-offset:3px; }
 @media (prefers-reduced-motion:reduce) { *, *::before, *::after { animation-duration:.01ms !important; transition-duration:.01ms !important; scroll-behavior:auto !important; } }
