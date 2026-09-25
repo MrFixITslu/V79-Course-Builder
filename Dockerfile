@@ -5,7 +5,7 @@ WORKDIR /app
 RUN apk add --no-cache python3 ffmpeg espeak font-dejavu
 
 COPY package*.json ./
-RUN npm install
+RUN npm ci --no-audit --no-fund
 
 COPY . .
 RUN python3 scripts/generate-junior-videos.py
@@ -26,7 +26,7 @@ ENV NODE_ENV=production
 ENV PORT=3030
 
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm ci --omit=dev --no-audit --no-fund
 
 COPY --from=builder /app/dist ./dist
 

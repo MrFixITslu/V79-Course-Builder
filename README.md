@@ -128,7 +128,7 @@ The course is seeded idempotently on first application start. Existing copies ar
 
 - **Frontend**: React, Vite, Tailwind CSS, Lucide Icons, Motion
 - **Backend**: Node.js, Express, TypeScript
-- **Database**: a JSON file store (`data/store.json`). Note: `docker-compose.yml` also starts a PostgreSQL container and `schema.sql` describes a relational schema for one, but the server does not currently read `DATABASE_URL` or connect to Postgres at all - that container is currently unused. Until the server is migrated to actually use it, don't rely on the Postgres schema for durability; only `data/store.json` is real.
+- **Database**: the persistent JSON file store (`data/store.json`). The old Compose PostgreSQL container was unused by the application and has been removed from the service definition. Its existing Docker volume is deliberately left intact; back up the JSON store and learner files before deployment. Do not use `docker compose down -v`.
 - **Deployment**: Docker & Docker Compose
 
 ---
@@ -218,8 +218,11 @@ importing, deleting and changing course status refreshes the admin list. The lea
 refreshes on return to the tab and every 30 seconds. Only Published/Uploaded courses appear.
 Deleting a linked website course removes its remote entry first; if the website cannot be
 reached, deletion returns an error and preserves the local record for retry. Unpublishing a
-linked course follows the same rule. Set `ACADEMY_PUBLIC_URL` to the academy's HTTPS address
-so website publications link back to the correct portal. Existing remote entries should be
+linked course follows the same rule. Set the Academy app's `ACADEMY_PUBLIC_URL` to
+`https://v79academy.v79sl.com` (without `/academy`); website course links are built
+at `/course/:id`, while the learner catalogue is `https://v79academy.v79sl.com/academy`.
+Set the Hub app's `ACADEMY_PUBLIC_URL` to that full learner catalogue URL.
+The Academy setting generates website publication links; existing remote entries should be
 republished once to update their links. Curriculum edits still require the explicit Publish action.
 
 Choose **Free** or **Subscription access** in a course's Overview settings. Legacy Premium and
@@ -247,3 +250,9 @@ printed in application logs. Existing administrator passwords are retained.
 
 Validation: `npm run lint`, `npm test`, `npm run build`, then `npm run test:api`. The API tests
 use an isolated temporary data directory and never modify production course or learner records.
+
+## Automatic server deployment
+
+After a validated merge to `main`, the delivery workflow deploys the `course-builder` service through Tailscale and pinned SSH. Publication to GHCR alone never changes the server. In GitHub **Settings → Environments → production**, configure the secrets `TAILSCALE_AUTHKEY`, `DEPLOY_HOST` (the server's Tailscale address), `DEPLOY_USER`, `DEPLOY_SSH_KEY` (private deploy key), and `DEPLOY_KNOWN_HOSTS` (independently verified host key). Restrict who can change the production environment. Configure environment variables `DEPLOY_ROOT` (absolute existing server directory containing this app's Compose file and `.env`), `DEPLOY_PROJECT` (the current Compose project shown by `docker inspect`), and optional `DEPLOY_SSH_PORT` (default 22).
+
+The deploy user needs Docker and `rsync` access and the server must already have `proxy_network`. Before enabling the workflow, back up the application's existing data, encryption keys, uploads, databases and `.env` and verify a restore. The script preserves `.env`, `data`, `uploads`, backups and existing `.git`; it updates the app in place, starts only `course-builder` and checks its HTTP readiness inside the container. It does not remove orphan containers or volumes. Source removed from Git may remain in the server directory because deployment intentionally does not delete unknown local files. A first merge will fail closed if a required secret, mount, project, or server directory is absent. Review Actions → deploy and record the `.deployed_sha` in the server directory after each successful release.
